@@ -50,8 +50,10 @@ const TAG_NAME = { CNS: 'Central nervous system', PNS: 'Peripheral nervous syste
 const S = {
   M: null, i18n: {}, lang: 'en',
   byId: new Map(), groups: new Map(), lmByTarget: new Map(), siblings: new Map(), lmById: new Map(),
-  kids: new Map(), // groupId | "root:<sys>" -> { groups: [], items: Map(name -> recs[]) }
-  roots: new Map(), // system -> root groups
+  childGroups: new Map(), // group id -> child groups (one global anatomical hierarchy shared by all systems)
+  rootGroups: [],         // groups whose parent is unknown
+  items: new Map(),       // `${system}|${groupId}` -> Map(name -> recs[]); groupId '' = not in any group
+  counts: new Map(),
   sys: new Map(),  // key -> { group, loaded, loading, visible, progress }
   meshes: new Map(), // id -> Mesh[]
   sel: new Set(), cur: null, curLm: null, ghost: false, iso: false, pins: false,
@@ -382,11 +384,16 @@ async function showLandmark(lm) {
 }
 
 // ---------------------------------------------------------- navigation tree --
-const openers = new Map(); // groupId -> open()
-function countIn(gid) {
-  const k = S.kids.get(gid); if (!k) return 0;
-  if (k.count != null) return k.count;
-  k.count = k.items.size + k.groups.reduce((a, g) => a + countIn(g.id), 0); return k.count;
+// A group (e.g. "Bones of pectoral girdle") is shared by several systems: the bones, but also the muscle attachments
+// that sit on them. Every tree therefore filters by system, so each system only lists its own structures.
+const openers = new Map(); // `${system}|${groupId}` -> open()
+const itemsOf = (sys, gid) => S.items.get(`${sys}|${gid}`);
+function countIn(sys, gid) {
+  const key = `${sys}|${gid}`;
+  if (S.counts.has(key)) return S.counts.get(key);
+  let n = itemsOf(sys, gid)?.size || 0;
+  for (const c of S.childGroups.get(gid) || []) n += countIn(sys, c.id);
+  S.counts.set(key, n); return n;
 }
 function itemRow(name, recs) {
   const rec = recs[0];
@@ -399,7 +406,7 @@ function itemRow(name, recs) {
 }
 function groupNode(g, sys) {
   const li = el('li'); const row = el('button', { className: 'row', type: 'button' }, el('span', { className: 'chev' }, '›'),
-    S.lang === 'en' ? g.name : (S.i18n[g.name.toLowerCase()]?.[S.lang] || g.name), el('span', { className: 'n' }, String(countIn(g.id))));
+    S.lang === 'en' ? g.name : (S.i18n[g.name.toLowerCase()]?.[S.lang] || g.name), el('span', { className: 'n' }, String(countIn(sys, g.id))));
   row.dataset.gid = g.id;
   const ul = el('ul'); ul.hidden = true; let built = false;
   const open = (force) => {
@@ -407,28 +414,27 @@ function groupNode(g, sys) {
     if (want && !built) { fillLevel(ul, g.id, sys); built = true; }
     ul.hidden = !want; row.classList.toggle('open', want);
   };
-  openers.set(g.id, open); row.addEventListener('click', () => { open(); selectGroup(g); });
+  openers.set(`${sys}|${g.id}`, open); row.addEventListener('click', () => { open(); selectGroup(g, sys); });
   li.append(row, ul); return li;
 }
-function groupStructures(gid) {
-  const k = S.kids.get(gid), out = [];
-  if (!k) return out;
-  for (const recs of k.items.values()) out.push(...recs);
-  for (const g of k.groups) out.push(...groupStructures(g.id));
+function groupStructures(sys, gid) {
+  const out = [], m = itemsOf(sys, gid);
+  if (m) for (const recs of m.values()) out.push(...recs);
+  for (const c of S.childGroups.get(gid) || []) out.push(...groupStructures(sys, c.id));
   return out;
 }
-async function selectGroup(g) {
-  const recs = groupStructures(g.id);
+async function selectGroup(g, sys) {
+  const recs = groupStructures(sys, g.id);
   if (!recs.length) return;
   S.cur = null; S.curLm = null; S.sel = new Set(recs.slice(0, 800).map((r) => r.id));
-  if (!S.sys.get(g.system)?.visible) await setSystemVisible(g.system, true); else await loadSystem(g.system);
+  if (!S.sys.get(sys)?.visible) await setSystemVisible(sys, true); else await loadSystem(sys);
   restyle(); markTree();
-  const color = SYS[g.system]?.[1] || '#888', chain = []; let p = S.groups.get(g.parent);
+  const color = SYS[sys]?.[1] || '#888', chain = []; let p = S.groups.get(g.parent);
   while (p) { chain.unshift(p); p = S.groups.get(p.parent); }
   const gname = (x) => (S.lang === 'en' ? x.name : (S.i18n[x.name.toLowerCase()]?.[S.lang] || x.name));
   const box = el('div', { style: `--dot:${color}` }, el('h2', {}, gname(g)));
   if (chain.length > 1) box.append(el('div', { className: 'crumbs' }, chain.slice(1).flatMap((c) => [gname(c), ' › ']), gname(g)));
-  box.append(el('div', { className: 'pills' }, el('span', { className: 'pill sys' }, SYS[g.system]?.[0] || g.system), el('span', { className: 'pill' }, `${recs.length} structures`)));
+  box.append(el('div', { className: 'pills' }, el('span', { className: 'pill sys' }, SYS[sys]?.[0] || sys), el('span', { className: 'pill' }, `${recs.length} structures`)));
   box.append(el('div', { className: 'actions' },
     el('button', { className: 'btn primary', onclick: () => focusRecs(recs) }, 'Focus'),
     el('button', { className: 'btn', onclick: () => { S.iso = !S.iso; restyle(); } }, 'Isolate'),
@@ -439,19 +445,20 @@ async function selectGroup(g) {
   const t = (await descFor(g.system))[g.name];
   if (t) holder.append(el('h3', {}, 'Description'), fmtDesc(t, g.name), el('p', { className: 'fine' }, 'Text: Wikipedia, CC BY-SA.'));
 }
-function fillLevel(ul, gid, sys) {
-  const k = S.kids.get(gid); if (!k) return;
-  for (const g of k.groups) if (countIn(g.id) > 0) ul.append(groupNode(g, sys)); // skip empty classification headings
-  const names = [...k.items.keys()].sort((a, b) => a.localeCompare(b));
-  for (const n of names) ul.append(el('li', {}, itemRow(n, k.items.get(n))));
+function appendItems(ul, sys, gid) {
+  const m = itemsOf(sys, gid);
+  if (!m) return;
+  for (const n of [...m.keys()].sort((a, b) => a.localeCompare(b))) ul.append(el('li', {}, itemRow(n, m.get(n))));
 }
-function topLevel(sys) {
-  const roots = S.roots.get(sys) || [];
-  return roots.length === 1 ? roots[0].id : `root:${sys}`; // a sole root heading is the system itself: show its children directly
+function fillLevel(ul, gid, sys) {
+  for (const g of S.childGroups.get(gid) || []) if (countIn(sys, g.id) > 0) ul.append(groupNode(g, sys)); // skips empty classification headings
+  appendItems(ul, sys, gid);
 }
 function fillTop(ul, sys) {
-  fillLevel(ul, topLevel(sys), sys);
-  if (topLevel(sys) !== `root:${sys}`) fillLevel(ul, `root:${sys}`, sys); // structures that sit outside any group
+  const roots = S.rootGroups.filter((g) => countIn(sys, g.id) > 0);
+  if (roots.length === 1) fillLevel(ul, roots[0].id, sys); // a sole root heading is the system itself: show its children directly
+  else for (const g of roots) ul.append(groupNode(g, sys));
+  appendItems(ul, sys, ''); // structures that sit outside any group
 }
 function buildSystems() {
   const ul = $('#systems'); ul.replaceChildren(); openers.clear();
@@ -489,7 +496,7 @@ function revealInTree(rec) {
   li._ensureTree();
   const chain = []; let g = S.groups.get(rec.group);
   while (g) { chain.unshift(g.id); g = S.groups.get(g.parent); }
-  for (const gid of chain) openers.get(gid)?.(true);
+  for (const gid of chain) openers.get(`${rec.system}|${gid}`)?.(true);
   markTree(); document.querySelector('.row.sel')?.scrollIntoView({ block: 'center', behavior: reduce() ? 'auto' : 'smooth' });
 }
 
@@ -584,20 +591,18 @@ async function init() {
   } catch (e) {
     setLoading(null); $('#browse').append(el('p', { className: 'fine', style: 'padding:8px' }, `Could not load the atlas data (${e.message}). Run tools/export_web.py and serve this folder over http.`)); return;
   }
-  for (const g of S.M.groups) { S.groups.set(g.id, g); S.kids.set(g.id, { groups: [], items: new Map() }); }
-  for (const k of new Set(S.M.systems.map((s) => s.key))) { S.kids.set(`root:${k}`, { groups: [], items: new Map() }); S.roots.set(k, []); }
+  for (const g of S.M.groups) { S.groups.set(g.id, g); S.childGroups.set(g.id, []); }
   for (const g of S.M.groups) {
-    if (g.parent && S.groups.has(g.parent)) S.kids.get(g.parent).groups.push(g);
-    else S.roots.get(g.system)?.push(g);
+    if (g.parent && S.groups.has(g.parent)) S.childGroups.get(g.parent).push(g);
+    else S.rootGroups.push(g);
   }
-  // several root groups in a system -> list them under a synthetic root; a sole root heading is skipped (see topLevel)
-  for (const [k, roots] of S.roots) if (roots.length > 1) S.kids.get(`root:${k}`).groups.push(...roots);
   for (const r of S.M.structures) {
     S.byId.set(r.id, r);
     const sk = `${r.system}|${r.group}|${r.name}`;
     if (!S.siblings.has(sk)) S.siblings.set(sk, []); S.siblings.get(sk).push(r);
-    const gid = S.groups.has(r.group) ? r.group : `root:${r.system}`;
-    const kids = S.kids.get(gid); if (!kids.items.has(r.name)) kids.items.set(r.name, []); kids.items.get(r.name).push(r);
+    const ik = `${r.system}|${S.groups.has(r.group) ? r.group : ''}`;
+    if (!S.items.has(ik)) S.items.set(ik, new Map());
+    const m = S.items.get(ik); if (!m.has(r.name)) m.set(r.name, []); m.get(r.name).push(r);
   }
   for (const l of S.M.landmarks) { S.lmById.set(l.id, l); if (!S.lmByTarget.has(l.target)) S.lmByTarget.set(l.target, []); S.lmByTarget.get(l.target).push(l); }
   const pathText = (r) => crumbs(r).map((g) => g.name).join(' ');

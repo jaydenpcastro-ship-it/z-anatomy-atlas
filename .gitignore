@@ -1,0 +1,17 @@
+# Startup.blend is ~300 MB: over GitHub's 100 MB per-file limit. Keep it out of the repo (share it separately / Git LFS).
+*.blend
+*.blend1
+__pycache__/
+*.pyc
+
+# scratch output
+renders/_test/
+renders/render_log.txt
+web/export_log.txt
+web/export_err.txt
+web/img/render_log.txt
+web/img/render_err.txt
+
+# full-size renders (~66 MB, regenerate with tools/render_views.py); the site only needs web/img thumbnails
+renders/
+web/nav_test_log.txt

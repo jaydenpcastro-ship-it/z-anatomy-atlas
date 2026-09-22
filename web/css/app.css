@@ -133,6 +133,16 @@ ul { list-style: none; margin: 0; padding: 0; }
 .lm-list button { font-size: 12px; background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 2px 7px; }
 .lm-list button:hover { border-color: var(--warn); }
 
+/* export panel: download the current selection as a PNG or a multi-page PDF */
+.export { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.export h3 { margin-top: 0; }
+.exp-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; flex-wrap: wrap; }
+.exp-row.col { align-items: flex-start; flex-direction: column; gap: 6px; }
+.exp-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; min-width: 62px; }
+.exp-row.check { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.exp-go { margin-top: 10px; width: 100%; font-weight: 600; }
+.exp-go:disabled { opacity: .6; cursor: default; }
+
 /* stage overlay for labels / pins that follow 3D points; children opt in to pointer events */
 #overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
 .mode-btn { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; font-weight: 600; }

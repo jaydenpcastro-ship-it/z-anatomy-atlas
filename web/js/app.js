@@ -82,7 +82,7 @@ const canvas = $('#gl');
 const stage = $('#stage');
 let renderer;
 try {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
 } catch (e) {
   stage.append(el('p', { style: 'padding:2rem' }, 'WebGL is not available in this browser, so the 3D view cannot start.'));
   throw e;
@@ -450,6 +450,7 @@ function multiInfo() {
     el('button', { className: 'btn', title: 'Show only the selected structures (I)', onclick: () => toggleIso() }, S.iso ? 'Show all' : 'Isolate selection'),
     el('button', { className: 'btn', onclick: () => { S.ghost = !S.ghost; restyle(); } }, 'Ghost others'),
     el('button', { className: 'btn', onclick: clearSel }, 'Clear all')));
+  box.append(buildExportSection());
   $('#info').replaceChildren(box);
 }
 function clearSel() {
@@ -475,6 +476,212 @@ const toggleIso = () => setIso(!S.iso);
 $('#clearBtn').addEventListener('click', clearSel);
 $('#ghostBtn').addEventListener('click', () => { S.ghost = !S.ghost; restyle(); });
 $('#isoBtn').addEventListener('click', () => toggleIso());
+
+// ------------------------------------------------------------------ export --
+// Downloads exactly what is currently highlighted in the 3D view — one structure, a whole muscle, a group, or an
+// arbitrary multi-selection — as a PNG or a multi-page PDF. Can step through Front/Back/Left/Right and through an
+// open Motion sequence (one page/tile per view, or per view x pose), with chosen labels burned into the image.
+const EXPORT_VIEWS = [['cur', 'Current'], ['front', 'Front'], ['back', 'Back'], ['left', 'Left'], ['right', 'Right']];
+const EXPORT_LABELS = [['name', 'Structure name'], ['latin', 'Latin name'], ['landmarks', 'Landmark names']];
+const EXPORT = { format: 'png', views: new Set(['cur']), labels: new Set(['name']), motion: false };
+
+// One label per structure INSTANCE (not averaged across left/right), so the text sits on that instance, not floating
+// between them. Capped so a huge group selection doesn't bury the image in overlapping text.
+function labelPointsFor(recs, opts) {
+  const pts = [];
+  if ((opts.has('name') || opts.has('latin')) && recs.length <= 40) {
+    for (const r of recs) {
+      let text = opts.has('name') ? nameOf(r) : '';
+      if (opts.has('latin')) { const la = latinOf(r); if (la && la.toLowerCase() !== nameOf(r).toLowerCase()) text = text ? `${text} (${la})` : la; }
+      if (text) pts.push({ pos: boundsOf([r]).getCenter(new THREE.Vector3()), text, color: SYS[r.system]?.[1] || '#5eead4' });
+    }
+  }
+  if (opts.has('landmarks')) {
+    const ids = new Set(recs.map((r) => r.id)), seen = new Set();
+    for (const l of S.M.landmarks) {
+      if (!ids.has(l.target)) continue;
+      const key = l.name + (l.side || ''); if (seen.has(key)) continue; seen.add(key);
+      pts.push({ pos: new THREE.Vector3(...l.pos), text: l.name, color: '#ffb020' });
+    }
+  }
+  return pts;
+}
+// Pastes the WebGL frame onto a canvas with a title header and text labels, at the canvas's own (device-pixel) resolution.
+function composeFrame(srcCanvas, points, title, subtitle) {
+  const scale = srcCanvas.width / Math.max(stage.clientWidth, 1);
+  const pad = Math.round(46 * scale);
+  const c = document.createElement('canvas'); c.width = srcCanvas.width; c.height = srcCanvas.height + pad;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(srcCanvas, 0, pad);
+  ctx.fillStyle = '#e6edf3'; ctx.font = `700 ${Math.round(pad * 0.36)}px system-ui, sans-serif`;
+  ctx.fillText(title, 16 * scale, pad * 0.46);
+  if (subtitle) { ctx.fillStyle = '#93a1b3'; ctx.font = `${Math.round(pad * 0.26)}px system-ui, sans-serif`; ctx.fillText(subtitle, 16 * scale, pad * 0.82); }
+  ctx.font = `600 ${Math.round(13 * scale)}px system-ui, sans-serif`;
+  // nudge labels apart that would otherwise land on top of each other (e.g. left/right pairs close together in this view)
+  const sorted = [...points].sort((a, b) => a.y - b.y);
+  for (let i = 1; i < sorted.length; i++) for (let j = 0; j < i; j++) {
+    if (Math.abs(sorted[i].x - sorted[j].x) < 150 && Math.abs(sorted[i].y - sorted[j].y) < 18) sorted[i].y = sorted[j].y + 18;
+  }
+  for (const p of sorted) {
+    const x = p.x * scale, y = p.y * scale + pad;
+    ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(x, y, 3.5 * scale, 0, Math.PI * 2); ctx.fill();
+    const tw = ctx.measureText(p.text).width, bx = x + 8 * scale, by = y - 9 * scale;
+    ctx.fillStyle = 'rgba(13,17,23,.82)'; ctx.fillRect(bx - 4 * scale, by - 4 * scale, tw + 8 * scale, 20 * scale);
+    ctx.fillStyle = '#e6edf3'; ctx.fillText(p.text, bx, by + 11 * scale);
+  }
+  return c.toDataURL('image/png');
+}
+// Repoints the camera at recs for one plane (or leaves it where it is for 'cur'), renders, composes labels, then
+// restores the camera. Synchronous end-to-end so OrbitControls never observes the temporary camera move.
+function captureExportFrame(recs, viewKey, labelOpts, title, subtitle) {
+  const savedP = camera.position.clone(), savedT = controls.target.clone();
+  if (viewKey !== 'cur') {
+    const dir = new THREE.Vector3(...VIEWS[viewKey]).normalize();
+    const b = boundsOf(recs), c = b.getCenter(new THREE.Vector3()), r = Math.max(b.getSize(new THREE.Vector3()).length() / 2, 0.02);
+    const vHalf = THREE.MathUtils.degToRad(camera.fov / 2), hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
+    const dist = Math.max(r / Math.sin(Math.min(vHalf, hHalf)) * 1.15, 0.012);
+    camera.position.copy(c.clone().add(dir.multiplyScalar(dist))); controls.target.copy(c); camera.lookAt(c);
+  }
+  renderer.render(scene, camera);
+  const pts = [];
+  for (const lp of labelPointsFor(recs, labelOpts)) { const p = project(lp.pos); if (p.visible) pts.push({ x: p.x, y: p.y, text: lp.text, color: lp.color }); }
+  const dataURL = composeFrame(canvas, pts, title, subtitle);
+  if (viewKey !== 'cur') { camera.position.copy(savedP); controls.target.copy(savedT); camera.lookAt(savedT); }
+  dirty = true;
+  return dataURL;
+}
+// Waits for the motion module's per-frame hook to have run at least once with the new pose. Races rAF against a
+// timeout fallback so an export started just as the tab loses focus (rAF can be paused in background tabs) still
+// finishes instead of hanging forever.
+const oneFrame = () => new Promise((res) => { let done = false; const go = () => { if (!done) { done = true; res(); } }; requestAnimationFrame(go); setTimeout(go, 80); });
+const nextFrames = (n) => { let p = Promise.resolve(); for (let i = 0; i < n; i++) p = p.then(oneFrame); return p; };
+const slug = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'export';
+function downloadDataURL(dataURL, filename) {
+  const a = el('a', { href: dataURL, download: filename }); document.body.append(a); a.click(); a.remove();
+}
+// Loads a data URL into an <img>, resolving on 'load' rather than the Decode API: decode() can hang indefinitely
+// in a tab that has lost focus/visibility (Chrome defers it with paint scheduling), while 'load' fires promptly
+// regardless, since the data is already local (no network wait either way).
+const loadImage = (src) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+function exportPNG(frames, filename) {
+  if (frames.length === 1) return downloadDataURL(frames[0].dataURL, `${filename}.png`);
+  const cols = frames.length > 4 ? 3 : 2, rows = Math.ceil(frames.length / cols);
+  return Promise.all(frames.map((f) => loadImage(f.dataURL))).then((imgs) => {
+    const w = imgs[0].naturalWidth, h = imgs[0].naturalHeight, gap = Math.round(w * 0.02);
+    const c = document.createElement('canvas'); c.width = cols * w + (cols + 1) * gap; c.height = rows * h + (rows + 1) * gap;
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, c.width, c.height);
+    imgs.forEach((im, i) => ctx.drawImage(im, gap + (i % cols) * (w + gap), gap + Math.floor(i / cols) * (h + gap)));
+    downloadDataURL(c.toDataURL('image/png'), `${filename}.png`);
+  });
+}
+async function exportPDF(frames, filename) {
+  const { jsPDF } = await import('https://cdn.jsdelivr.net/npm/jspdf@2.5.2/+esm');
+  const dims = await Promise.all(frames.map((f) => loadImage(f.dataURL).then((im) => ({ w: im.naturalWidth, h: im.naturalHeight }))));
+  const doc = new jsPDF({ orientation: dims[0].w >= dims[0].h ? 'landscape' : 'portrait', unit: 'px', format: [dims[0].w, dims[0].h], compress: true });
+  frames.forEach((f, i) => {
+    if (i > 0) doc.addPage([dims[i].w, dims[i].h], dims[i].w >= dims[i].h ? 'landscape' : 'portrait');
+    doc.addImage(f.dataURL, 'PNG', 0, 0, dims[i].w, dims[i].h);
+  });
+  doc.save(`${filename}.pdf`);
+}
+// Steps the camera through the chosen views (and, if requested, an open Motion session through start/mid/end pose
+// per view), capturing one frame each time, then bundles them into the chosen file and downloads it.
+async function runExport(format) {
+  const recs = selectionRecs();
+  if (!recs.length) { notify('Nothing selected to export'); return; }
+  const views = EXPORT.views.size ? [...EXPORT.views] : ['cur'];
+  const names = [...new Set(recs.map((r) => nameOf(r)))];
+  const systems = [...new Set(recs.map((r) => SYS[r.system]?.[0] || r.system))];
+  const title = `Z-Anatomy Atlas — ${names.length <= 3 ? names.join(', ') : `${names.length} structures`}`;
+  const ses = atlas.motion?.session;
+  const wantMotion = EXPORT.motion && ses && ses.ready && ses.rec && recs.some((r) => r.id === ses.rec.id);
+  const saved = wantMotion ? { u: ses.u, scrub: ses.scrub, playing: ses.playing } : null;
+  const uSteps = wantMotion ? [0, 0.5, 1] : [null];
+  const frames = [];
+  try {
+    for (const v of views) {
+      for (const u of uSteps) {
+        if (u != null) { ses.scrub = true; ses.playing = false; ses.u = u; await nextFrames(2); }
+        const sub = [systems.join(' · '), `${EXPORT_VIEWS.find(([k]) => k === v)?.[1]} view`, u != null ? `pose ${Math.round(u * 100)}%` : null].filter(Boolean).join(' · ');
+        frames.push({ dataURL: captureExportFrame(recs, v, EXPORT.labels, title, sub) });
+      }
+    }
+  } finally {
+    if (saved) { ses.u = saved.u; ses.scrub = saved.scrub; ses.playing = saved.playing; }
+  }
+  const filename = `z-anatomy_${slug(names[0] || 'selection')}${names.length > 1 ? `-and-${names.length - 1}-more` : ''}`;
+  if (format === 'pdf') await exportPDF(frames, filename); else await exportPNG(frames, filename);
+}
+// The "Export" section embedded under each structure / group / multi-selection: pick a format, which planes and
+// (when a motion is open for this exact selection) motion poses to capture, and which labels to burn in, then go.
+function buildExportSection() {
+  const box = el('div', { className: 'export' });
+  box.append(el('h3', {}, 'Export'), el('p', { className: 'fine' }, 'Downloads exactly what is highlighted in the 3D view now — as a picture, or as pages moving through the chosen views/motion in a PDF.'));
+
+  const btn = el('button', { type: 'button', className: 'btn primary exp-go' }, `Download ${EXPORT.format.toUpperCase()}`);
+
+  const fmtBox = el('div', { className: 'chips' });
+  for (const f of ['png', 'pdf']) {
+    const chip = el('button', { type: 'button', className: 'chip' + (EXPORT.format === f ? ' prime' : ''), 'aria-pressed': String(EXPORT.format === f) }, f.toUpperCase());
+    chip.addEventListener('click', () => {
+      EXPORT.format = f; fmtBox.querySelectorAll('.chip').forEach((b) => { b.classList.remove('prime'); b.setAttribute('aria-pressed', 'false'); });
+      chip.classList.add('prime'); chip.setAttribute('aria-pressed', 'true'); btn.textContent = `Download ${f.toUpperCase()}`;
+    });
+    fmtBox.append(chip);
+  }
+  const viewsBox = el('div', { className: 'chips' });
+  for (const [k, label] of EXPORT_VIEWS) {
+    const chip = el('button', { type: 'button', className: 'chip' + (EXPORT.views.has(k) ? ' prime' : ''), 'aria-pressed': String(EXPORT.views.has(k)) }, label);
+    chip.addEventListener('click', () => {
+      if (EXPORT.views.has(k)) EXPORT.views.delete(k); else EXPORT.views.add(k);
+      if (!EXPORT.views.size) EXPORT.views.add('cur');
+      chip.classList.toggle('prime', EXPORT.views.has(k)); chip.setAttribute('aria-pressed', String(EXPORT.views.has(k)));
+    });
+    viewsBox.append(chip);
+  }
+  const labelsBox = el('div', { className: 'chips' });
+  for (const [k, label] of EXPORT_LABELS) {
+    const chip = el('button', { type: 'button', className: 'chip' + (EXPORT.labels.has(k) ? ' prime' : ''), 'aria-pressed': String(EXPORT.labels.has(k)) }, label);
+    chip.addEventListener('click', () => {
+      if (EXPORT.labels.has(k)) EXPORT.labels.delete(k); else EXPORT.labels.add(k);
+      chip.classList.toggle('prime', EXPORT.labels.has(k)); chip.setAttribute('aria-pressed', String(EXPORT.labels.has(k)));
+    });
+    labelsBox.append(chip);
+  }
+  box.append(
+    el('div', { className: 'exp-row' }, el('span', { className: 'exp-label' }, 'Format'), fmtBox),
+    el('div', { className: 'exp-row col' }, el('span', { className: 'exp-label' }, 'Views to capture'), viewsBox),
+    el('div', { className: 'exp-row col' }, el('span', { className: 'exp-label' }, 'Labels to show'), labelsBox),
+  );
+
+  // The Motion tab's session only finishes loading a moment after this panel is built (it awaits the skeleton
+  // system), so check now and, if not ready yet, keep checking each frame until it is (or this panel is replaced).
+  const motionRow = el('div'); box.append(motionRow);
+  const tryFillMotion = () => {
+    const ses = atlas.motion?.session, recs = selectionRecs();
+    const available = !!(ses && ses.ready && ses.rec && recs.some((r) => r.id === ses.rec.id));
+    if (!available) { EXPORT.motion = false; return false; }
+    if (!motionRow.firstChild) {
+      const cb = el('input', { type: 'checkbox', checked: EXPORT.motion });
+      cb.addEventListener('change', () => { EXPORT.motion = cb.checked; });
+      motionRow.append(el('label', { className: 'exp-row check' }, cb, ' Include the open motion sequence (start → mid → end, per view)'));
+    }
+    return true;
+  };
+  if (!tryFillMotion()) {
+    const iv = setInterval(() => { if (!box.isConnected || tryFillMotion()) clearInterval(iv); }, 150);
+  }
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true; const was = btn.textContent; btn.textContent = 'Exporting…';
+    try { await runExport(EXPORT.format); notify('Export ready — check your downloads'); }
+    catch (e) { console.error(e); notify('Export failed — see console for details'); }
+    finally { btn.disabled = false; btn.textContent = was; }
+  });
+  box.append(btn);
+  return box;
+}
 
 // -------------------------------------------------------------- info panel --
 async function descFor(sys) {
@@ -637,6 +844,7 @@ async function showInfo(sib) {
     }, t.id === 'text' && isMuscle(rec) ? 'Full text' : t.label))));
   }
   const host = el('div', { className: 'tabpanel', role: 'tabpanel' }); box.append(host);
+  box.append(buildExportSection());
   const info = $('#info'), top = info.scrollTop, same = info.dataset.cur === rec.id;
   info.replaceChildren(box); info.dataset.cur = rec.id; if (same) info.scrollTop = top;
   active.render(sib, host, { rec, isCurrent: () => S.cur === rec && info.contains(host), el, nameOf });
@@ -717,6 +925,7 @@ async function selectGroup(g, sys) {
     el('button', { className: 'btn', onclick: () => { S.ghost = !S.ghost; restyle(); } }, 'Ghost others'),
     el('button', { className: 'btn', onclick: clearSel }, 'Clear')));
   const holder = el('div', {}); box.append(holder);
+  box.append(buildExportSection());
   $('#info').replaceChildren(box);
   const t = (await descFor(g.system))[g.name];
   if (t) {

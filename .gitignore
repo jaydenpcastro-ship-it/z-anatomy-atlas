@@ -15,3 +15,6 @@ web/img/render_err.txt
 # full-size renders (~66 MB, regenerate with tools/render_views.py); the site only needs web/img thumbnails
 renders/
 web/nav_test_log.txt
+tools/browser/node_modules/
+tools/browser/package-lock.json
+_shots/

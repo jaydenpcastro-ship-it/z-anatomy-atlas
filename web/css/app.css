@@ -117,6 +117,42 @@ ul { list-style: none; margin: 0; padding: 0; }
 .lm-list button { font-size: 12px; background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 2px 7px; }
 .lm-list button:hover { border-color: var(--warn); }
 
+/* stage overlay for labels / pins that follow 3D points; children opt in to pointer events */
+#overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
+.mode-btn { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; font-weight: 600; }
+.mode-btn:hover { border-color: var(--accent); }
+.mode-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* info panel tabs */
+.tabs { display: flex; gap: 2px; margin: 14px -4px 0; border-bottom: 1px solid var(--line); }
+.tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 7px 12px; color: var(--muted); font-weight: 600; margin-bottom: -1px; }
+.tab:hover { color: var(--text); }
+.tab.on { color: var(--text); border-bottom-color: var(--accent); }
+.tabpanel { padding-top: 4px; }
+
+/* concise muscle facts: origin / insertion / action / nerve */
+.facts { margin: 12px 0 4px; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.frow { display: grid; grid-template-columns: 102px 1fr; background: var(--panel); }
+.frow dt { display: flex; align-items: flex-start; gap: 7px; padding: 8px 8px 8px 10px; background: var(--panel2); color: var(--muted);
+  font-size: 11px; text-transform: uppercase; letter-spacing: .4px; font-weight: 600; white-space: nowrap; }
+.frow dt b { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--dot, var(--accent)); color: #0b0f14; font-size: 10px; flex: none; }
+.frow dd { margin: 0; padding: 7px 10px; line-height: 1.35; min-width: 0; }
+.frow .fv { display: block; }
+.frow .fv + .fv { margin-top: 2px; padding-top: 2px; border-top: 1px dashed var(--line); }
+.frow .none { color: var(--muted); font-style: italic; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { font-size: 12px; background: none; border: 1px solid var(--accent); color: var(--accent); border-radius: 99px; padding: 2px 10px 2px 8px; }
+.chip i { font-style: normal; font-size: 9px; margin-right: 5px; }
+.chip.prime { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.chip:hover { filter: brightness(1.12); }
+
+/* study mode: the quiz panel replaces the sidebar and the info panel */
+#study { grid-area: info; display: none; background: var(--panel); border-left: 1px solid var(--line); overflow: auto; min-height: 0; }
+body.study-open #app { grid-template-columns: 1fr minmax(360px, 30vw); grid-template-areas: "top top" "stage info"; }
+body.study-open #sidebar, body.study-open #info { display: none; }
+body.study-open #study { display: block; }
+body.study-open #study[hidden] { display: none; }
+
 @media (max-width: 1100px) { :root { --sidebar: 300px; --info: 300px; } }
 @media (max-width: 860px) {
   #app { grid-template-columns: 1fr; grid-template-rows: var(--top) 1fr 42vh; grid-template-areas: "top" "stage" "info"; }
@@ -126,6 +162,7 @@ ul { list-style: none; margin: 0; padding: 0; }
   body.nav-open #sidebar { transform: none; }
   .views button:nth-child(n+3):not([data-view="fit"]) { display: none; }
   #hint { display: none; }
-  #info { border-left: 0; border-top: 1px solid var(--line); }
+  #info, #study { border-left: 0; border-top: 1px solid var(--line); }
+  body.study-open #app { grid-template-columns: 1fr; grid-template-rows: var(--top) 1fr 52vh; grid-template-areas: "top" "stage" "info"; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

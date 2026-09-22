@@ -1,0 +1,255 @@
+# Curated muscle facts. One muscle per line:
+#   Name (exactly as in manifest.json) | origin ; origin | insertion ; insertion | action ; action | innervation | joint.movement.P/A, ...
+# P = prime mover, A = assists. Joint and movement slugs come from web/data/vocab.json. "A = B" makes A an alias of B.
+# Standard textbook values (Gray's / Moore / Netter); keep every field short. Build with tools/build_muscle_facts.py.
+
+## ---- shoulder girdle and thorax
+Descending part of trapezius muscle | Superior nuchal line, external occipital protuberance, nuchal ligament | Lateral third of clavicle, acromion | Elevates scapula; upward rotation; extends and laterally flexes neck | Accessory n. (CN XI), C3–C4 | scapulothoracic.elevation.P, scapulothoracic.upward-rotation.P, cervical-spine.extension.A, cervical-spine.lateral-flexion.A
+Transverse part of trapezius muscle | Spinous processes C7–T3 | Acromion, spine of scapula (lateral part) | Retracts scapula | Accessory n. (CN XI), C3–C4 | scapulothoracic.retraction.P
+Ascending part of trapezius muscle | Spinous processes T4–T12 | Medial end of spine of scapula | Depresses scapula; upward rotation; retracts | Accessory n. (CN XI), C3–C4 | scapulothoracic.depression.P, scapulothoracic.upward-rotation.A, scapulothoracic.retraction.A
+Levator scapulae | Transverse processes C1–C4 | Superior angle and medial border of scapula (above spine) | Elevates scapula; downward rotation; lateral flexion of neck | Dorsal scapular n. (C5), C3–C4 | scapulothoracic.elevation.P, scapulothoracic.downward-rotation.A, cervical-spine.lateral-flexion.A
+Rhomboid major muscle | Spinous processes T2–T5 | Medial border of scapula (below spine) | Retracts scapula; downward rotation; fixes scapula to thorax | Dorsal scapular n. (C4–C5) | scapulothoracic.retraction.P, scapulothoracic.downward-rotation.A, scapulothoracic.elevation.A
+Rhomboid minor muscle | Nuchal ligament, spinous processes C7–T1 | Medial border of scapula at root of spine | Retracts scapula; downward rotation; fixes scapula to thorax | Dorsal scapular n. (C4–C5) | scapulothoracic.retraction.P, scapulothoracic.downward-rotation.A, scapulothoracic.elevation.A
+Serratus anterior muscle | Outer surfaces of ribs 1–8 (9) | Anterior surface of medial border of scapula | Protracts scapula; upward rotation; holds scapula against thorax | Long thoracic n. (C5–C7) | scapulothoracic.protraction.P, scapulothoracic.upward-rotation.P
+Pectoralis minor muscle | Ribs 3–5 (anterior surfaces) | Coracoid process | Protracts and depresses scapula; downward rotation | Medial pectoral n. (C8–T1) | scapulothoracic.protraction.P, scapulothoracic.depression.A, scapulothoracic.downward-rotation.A
+Subclavius muscle | First rib and its costal cartilage | Inferior surface of middle third of clavicle | Depresses clavicle; steadies sternoclavicular joint | Nerve to subclavius (C5–C6) | sternoclavicular.depression.P
+Clavicular head of pectoralis major muscle | Medial half of clavicle | Lateral lip of intertubercular groove of humerus | Flexes, adducts and medially rotates arm | Lateral pectoral n. (C5–C7) | glenohumeral.flexion.P, glenohumeral.medial-rotation.P, glenohumeral.horizontal-adduction.P, glenohumeral.adduction.A
+Sternocostal head of pectoralis major muscle | Sternum, costal cartilages 1–6, external oblique aponeurosis | Lateral lip of intertubercular groove of humerus | Adducts and medially rotates arm; extends flexed arm | Lateral and medial pectoral nn. (C5–T1) | glenohumeral.adduction.P, glenohumeral.medial-rotation.P, glenohumeral.horizontal-adduction.P, glenohumeral.extension.A
+(Abdominal part of pectoralis major muscle) = Sternocostal head of pectoralis major muscle
+Clavicular part of deltoid muscle | Lateral third of clavicle | Deltoid tuberosity of humerus | Flexes and medially rotates arm; horizontal adduction | Axillary n. (C5–C6) | glenohumeral.flexion.P, glenohumeral.medial-rotation.A, glenohumeral.horizontal-adduction.A, glenohumeral.abduction.A
+Acromial part of deltoid muscle | Acromion | Deltoid tuberosity of humerus | Abducts arm (15°–90°) | Axillary n. (C5–C6) | glenohumeral.abduction.P
+Scapular spinal part of deltoid muscle | Spine of scapula | Deltoid tuberosity of humerus | Extends and laterally rotates arm; horizontal abduction | Axillary n. (C5–C6) | glenohumeral.extension.P, glenohumeral.lateral-rotation.A, glenohumeral.horizontal-abduction.P
+Supraspinatus muscle | Supraspinous fossa of scapula | Greater tubercle of humerus (superior facet) | Initiates abduction (first 15°); holds head in glenoid | Suprascapular n. (C5–C6) | glenohumeral.abduction.P
+Infraspinatus muscle | Infraspinous fossa of scapula | Greater tubercle of humerus (middle facet) | Laterally rotates arm; holds head in glenoid | Suprascapular n. (C5–C6) | glenohumeral.lateral-rotation.P, glenohumeral.horizontal-abduction.A
+Teres minor muscle | Upper lateral border of scapula | Greater tubercle of humerus (inferior facet) | Laterally rotates arm; holds head in glenoid | Axillary n. (C5–C6) | glenohumeral.lateral-rotation.P, glenohumeral.horizontal-abduction.A
+Subscapularis muscle | Subscapular fossa | Lesser tubercle of humerus | Medially rotates arm; holds head in glenoid | Upper and lower subscapular nn. (C5–C6) | glenohumeral.medial-rotation.P, glenohumeral.adduction.A
+Teres major muscle | Inferior angle and lower lateral border of scapula | Medial lip of intertubercular groove | Adducts, extends and medially rotates arm | Lower subscapular n. (C5–C6) | glenohumeral.adduction.P, glenohumeral.extension.P, glenohumeral.medial-rotation.P
+Latissimus dorsi muscle | Spinous processes T7–L5 (thoracolumbar fascia), iliac crest, ribs 10–12 | Floor of intertubercular groove of humerus | Extends, adducts and medially rotates arm | Thoracodorsal n. (C6–C8) | glenohumeral.extension.P, glenohumeral.adduction.P, glenohumeral.medial-rotation.P
+Coracobrachialis muscle | Coracoid process | Medial mid-shaft of humerus | Flexes and adducts arm | Musculocutaneous n. (C5–C7) | glenohumeral.flexion.A, glenohumeral.adduction.A
+
+## ---- arm
+Long head of biceps brachii | Supraglenoid tubercle of scapula | Radial tuberosity; bicipital aponeurosis | Flexes elbow; supinates forearm; weakly flexes shoulder | Musculocutaneous n. (C5–C6) | elbow.flexion.P, radioulnar.supination.P, glenohumeral.flexion.A
+Short head of biceps brachii | Coracoid process | Radial tuberosity; bicipital aponeurosis | Flexes elbow; supinates forearm; weakly flexes shoulder | Musculocutaneous n. (C5–C6) | elbow.flexion.P, radioulnar.supination.P, glenohumeral.flexion.A
+Brachialis muscle | Anterior distal half of humerus | Coronoid process and tuberosity of ulna | Flexes elbow in every forearm position | Musculocutaneous n. (C5–C6); radial n. | elbow.flexion.P
+Brachioradialis muscle | Lateral supracondylar ridge of humerus | Styloid process of radius | Flexes elbow (best in mid-pronation) | Radial n. (C5–C6) | elbow.flexion.A
+Long head of triceps brachii | Infraglenoid tubercle of scapula | Olecranon | Extends elbow; extends and adducts arm | Radial n. (C6–C8) | elbow.extension.P, glenohumeral.extension.A, glenohumeral.adduction.A
+Lateral head of triceps brachii | Posterior humerus, above radial groove | Olecranon | Extends elbow | Radial n. (C6–C8) | elbow.extension.P
+Medial head of triceps brachii | Posterior humerus, below radial groove | Olecranon | Extends elbow (always active) | Radial n. (C6–C8) | elbow.extension.P
+Anconeus muscle | Lateral epicondyle of humerus | Lateral olecranon, posterior ulna | Assists triceps in extending elbow; steadies ulna | Radial n. (C7–C8) | elbow.extension.A
+
+## ---- forearm
+Superficial head of pronator teres | Medial epicondyle (common flexor tendon) | Middle of lateral radius | Pronates forearm; weakly flexes elbow | Median n. (C6–C7) | radioulnar.pronation.P, elbow.flexion.A
+Deep head of pronator teres | Coronoid process of ulna | Middle of lateral radius | Pronates forearm; weakly flexes elbow | Median n. (C6–C7) | radioulnar.pronation.P, elbow.flexion.A
+Pronator quadratus | Distal quarter of anterior ulna | Distal quarter of anterior radius | Pronates forearm; binds radius to ulna | Anterior interosseous n. (C8–T1) | radioulnar.pronation.P
+Flexor carpi radialis | Medial epicondyle (common flexor tendon) | Bases of 2nd and 3rd metacarpals | Flexes and radially deviates wrist | Median n. (C6–C7) | wrist.flexion.P, wrist.radial-deviation.A
+Palmaris longus muscle | Medial epicondyle (common flexor tendon) | Flexor retinaculum, palmar aponeurosis | Flexes wrist; tenses palmar aponeurosis | Median n. (C7–C8) | wrist.flexion.A
+Humeral head of flexor carpi ulnaris | Medial epicondyle (common flexor tendon) | Pisiform, hook of hamate, base of 5th metacarpal | Flexes and ulnar deviates wrist | Ulnar n. (C7–T1) | wrist.flexion.P, wrist.ulnar-deviation.P
+Ulnar head of flexor carpi ulnaris | Olecranon, posterior border of ulna | Pisiform, hook of hamate, base of 5th metacarpal | Flexes and ulnar deviates wrist | Ulnar n. (C7–T1) | wrist.flexion.P, wrist.ulnar-deviation.P
+Humero-ulnar head of flexor digitorum superficialis | Medial epicondyle, coronoid process | Sides of middle phalanges, digits 2–5 | Flexes PIP joints; assists MCP and wrist flexion | Median n. (C7–T1) | interphalangeal-hand.flexion.P, metacarpophalangeal.flexion.A, wrist.flexion.A
+Radial head of flexor digitorum superficialis | Anterior oblique line of radius | Sides of middle phalanges, digits 2–5 | Flexes PIP joints; assists MCP and wrist flexion | Median n. (C7–T1) | interphalangeal-hand.flexion.P, metacarpophalangeal.flexion.A, wrist.flexion.A
+Flexor digitorum profundus | Proximal ¾ of anterior and medial ulna, interosseous membrane | Bases of distal phalanges, digits 2–5 | Flexes DIP (and PIP, MCP) joints; assists wrist flexion | Anterior interosseous n. (digits 2–3); ulnar n. (digits 4–5); C8–T1 | interphalangeal-hand.flexion.P, metacarpophalangeal.flexion.A, wrist.flexion.A
+Flexor pollicis longus | Anterior radius, interosseous membrane | Base of distal phalanx of thumb | Flexes thumb IP joint (and MCP, CMC) | Anterior interosseous n. (C7–C8) | interphalangeal-hand.flexion.P, metacarpophalangeal.flexion.A, carpometacarpal-1.flexion.A
+Extensor carpi radialis longus | Lateral supracondylar ridge of humerus | Base of 2nd metacarpal | Extends and radially deviates wrist | Radial n. (C6–C7) | wrist.extension.P, wrist.radial-deviation.P
+Extensor carpi radialis brevis | Lateral epicondyle (common extensor tendon) | Base of 3rd metacarpal | Extends wrist; steadies it in a fist | Deep branch of radial n. (C7–C8) | wrist.extension.P, wrist.radial-deviation.A
+Extensor digitorum | Lateral epicondyle (common extensor tendon) | Extensor expansions of digits 2–5 | Extends fingers (MCP first, then IP); extends wrist | Posterior interosseous n. (C7–C8) | metacarpophalangeal.extension.P, interphalangeal-hand.extension.A, wrist.extension.A
+Extensor digiti minimi | Lateral epicondyle (common extensor tendon) | Extensor expansion of digit 5 | Extends little finger | Posterior interosseous n. (C7–C8) | metacarpophalangeal.extension.P
+Humeral head of extensor carpi ulnaris | Lateral epicondyle (common extensor tendon) | Base of 5th metacarpal | Extends and ulnar deviates wrist | Posterior interosseous n. (C7–C8) | wrist.extension.P, wrist.ulnar-deviation.P
+Ulnar head of extensor carpi ulnaris | Posterior border of ulna | Base of 5th metacarpal | Extends and ulnar deviates wrist | Posterior interosseous n. (C7–C8) | wrist.extension.P, wrist.ulnar-deviation.P
+Supinator | Lateral epicondyle, supinator crest of ulna, radial collateral ligament | Lateral surface of proximal radius | Supinates forearm | Deep branch of radial n. (C6–C7) | radioulnar.supination.P
+Abductor pollicis longus | Posterior ulna and radius, interosseous membrane | Base of 1st metacarpal | Abducts and extends thumb at CMC; radial deviation | Posterior interosseous n. (C7–C8) | carpometacarpal-1.abduction.P, carpometacarpal-1.extension.A, wrist.radial-deviation.A
+Extensor pollicis brevis | Posterior radius, interosseous membrane | Base of proximal phalanx of thumb | Extends thumb MCP joint | Posterior interosseous n. (C7–C8) | metacarpophalangeal.extension.P, carpometacarpal-1.extension.A
+Extensor pollicis longus | Middle third of posterior ulna, interosseous membrane | Base of distal phalanx of thumb | Extends thumb IP and MCP joints | Posterior interosseous n. (C7–C8) | interphalangeal-hand.extension.P, carpometacarpal-1.extension.A
+Extensor indicis | Distal posterior ulna, interosseous membrane | Extensor expansion of index finger | Extends index finger (independent pointing) | Posterior interosseous n. (C7–C8) | metacarpophalangeal.extension.P
+
+## ---- hand
+Abductor pollicis brevis | Flexor retinaculum, scaphoid tubercle, trapezium | Lateral base of proximal phalanx of thumb | Abducts thumb | Median n., recurrent branch (C8–T1) | carpometacarpal-1.abduction.P
+Superficial head of flexor pollicis brevis | Flexor retinaculum, trapezium | Base of proximal phalanx of thumb | Flexes thumb at CMC and MCP | Median n., recurrent branch (C8–T1) | carpometacarpal-1.flexion.P, metacarpophalangeal.flexion.P
+Deep head of flexor pollicis brevis | Trapezoid, capitate | Base of proximal phalanx of thumb | Flexes thumb at CMC and MCP | Ulnar n., deep branch (C8–T1) | carpometacarpal-1.flexion.P, metacarpophalangeal.flexion.P
+Opponens pollicis muscle | Flexor retinaculum, trapezium | Lateral half of 1st metacarpal shaft | Opposes thumb (flexes and medially rotates 1st metacarpal) | Median n., recurrent branch (C8–T1) | carpometacarpal-1.opposition.P
+Oblique head of adductor pollicis | Capitate, bases of 2nd–3rd metacarpals | Medial base of proximal phalanx of thumb | Adducts thumb | Ulnar n., deep branch (C8–T1) | carpometacarpal-1.adduction.P
+Transverse head of adductor pollicis | Shaft of 3rd metacarpal | Medial base of proximal phalanx of thumb | Adducts thumb | Ulnar n., deep branch (C8–T1) | carpometacarpal-1.adduction.P
+Abductor digiti minimi of hand | Pisiform, tendon of flexor carpi ulnaris | Medial base of proximal phalanx of digit 5 | Abducts little finger | Ulnar n., deep branch (C8–T1) | metacarpophalangeal.abduction.P
+Flexor digiti minimi of hand | Hook of hamate, flexor retinaculum | Medial base of proximal phalanx of digit 5 | Flexes little finger at MCP | Ulnar n., deep branch (C8–T1) | metacarpophalangeal.flexion.P
+Opponens digiti minimi muscle of hand | Hook of hamate, flexor retinaculum | Medial border of 5th metacarpal | Draws 5th metacarpal forward (cups palm) | Ulnar n., deep branch (C8–T1) |
+Lumbrical muscles of hand | Tendons of flexor digitorum profundus | Lateral side of extensor expansions, digits 2–5 | Flex MCP joints; extend IP joints | Median n. (digits 2–3); ulnar n. (4–5); C8–T1 | metacarpophalangeal.flexion.P, interphalangeal-hand.extension.P
+Dorsal interossei muscles of hand | Adjacent sides of two metacarpals | Bases of proximal phalanges, extensor expansions (digits 2–4) | Abduct digits 2–4 (DAB); flex MCP, extend IP | Ulnar n., deep branch (C8–T1) | metacarpophalangeal.abduction.P, metacarpophalangeal.flexion.A
+Palmar interossei muscles | Palmar surfaces of metacarpals 2, 4, 5 | Extensor expansions of digits 2, 4, 5 | Adduct digits 2, 4, 5 (PAD); flex MCP | Ulnar n., deep branch (C8–T1) | metacarpophalangeal.adduction.P, metacarpophalangeal.flexion.A
+
+## ---- hip and thigh
+Iliacus muscle | Iliac fossa, ala of sacrum | Lesser trochanter (with psoas major) | Flexes hip; flexes trunk on fixed thigh | Femoral n. (L2–L4) | hip.flexion.P
+Psoas major | Bodies and transverse processes of T12–L5, discs | Lesser trochanter | Flexes hip; flexes and laterally flexes lumbar spine | Anterior rami of L1–L3 | hip.flexion.P, hip.lateral-rotation.A, lumbar-spine.flexion.A, lumbar-spine.lateral-flexion.A
+Pectineus muscle | Pectineal line of pubis | Pectineal line of femur | Adducts and flexes hip | Femoral n. (L2–L3); obturator n. | hip.adduction.P, hip.flexion.A
+Sartorius muscle | Anterior superior iliac spine | Superomedial tibia (pes anserinus) | Flexes, abducts and laterally rotates hip; flexes knee | Femoral n. (L2–L3) | hip.flexion.A, hip.abduction.A, hip.lateral-rotation.A, knee.flexion.A, knee.medial-rotation.A
+Rectus femoris muscle | Anterior inferior iliac spine, rim of acetabulum | Patella, then tibial tuberosity (patellar ligament) | Extends knee; flexes hip | Femoral n. (L2–L4) | knee.extension.P, hip.flexion.P
+Vastus lateralis muscle | Greater trochanter, lateral lip of linea aspera | Patella, then tibial tuberosity | Extends knee | Femoral n. (L2–L4) | knee.extension.P
+Vastus medialis muscle | Intertrochanteric line, medial lip of linea aspera | Patella, then tibial tuberosity | Extends knee; stabilises patella | Femoral n. (L2–L4) | knee.extension.P
+Vastus intermedius muscle | Anterior and lateral femoral shaft | Patella, then tibial tuberosity | Extends knee | Femoral n. (L2–L4) | knee.extension.P
+Tensor fasciae latae | Anterior superior iliac spine, iliac crest | Iliotibial tract to lateral tibial condyle | Flexes, abducts and medially rotates hip; tenses iliotibial tract | Superior gluteal n. (L4–S1) | hip.flexion.A, hip.abduction.A, hip.medial-rotation.A
+Gracilis muscle | Body and inferior ramus of pubis | Superomedial tibia (pes anserinus) | Adducts hip; flexes knee and medially rotates leg | Obturator n. (L2–L3) | hip.adduction.A, knee.flexion.A, knee.medial-rotation.A
+Adductor longus | Body of pubis below pubic crest | Middle third of linea aspera | Adducts hip; assists flexion | Obturator n. (L2–L4) | hip.adduction.P, hip.flexion.A
+Adductor brevis | Body and inferior ramus of pubis | Pectineal line, proximal linea aspera | Adducts hip | Obturator n. (L2–L4) | hip.adduction.P
+Adductor magnus | Inferior pubic ramus, ischial ramus, ischial tuberosity | Gluteal tuberosity, linea aspera, adductor tubercle | Adducts hip; hamstring part extends hip | Obturator n.; tibial n. (L2–L4) | hip.adduction.P, hip.extension.A
+(Adductor minimus) = Adductor magnus
+Gluteus maximus muscle | Posterior gluteal line of ilium, sacrum, coccyx, sacrotuberous ligament | Gluteal tuberosity; iliotibial tract | Extends and laterally rotates hip; upper fibres abduct | Inferior gluteal n. (L5–S2) | hip.extension.P, hip.lateral-rotation.P, hip.abduction.A
+Gluteus medius muscle | External ilium between anterior and posterior gluteal lines | Lateral surface of greater trochanter | Abducts hip; holds pelvis level in single-leg stance | Superior gluteal n. (L4–S1) | hip.abduction.P, hip.medial-rotation.A
+Gluteus minimus muscle | External ilium between anterior and inferior gluteal lines | Anterior surface of greater trochanter | Abducts and medially rotates hip | Superior gluteal n. (L4–S1) | hip.abduction.P, hip.medial-rotation.A
+Piriformis muscle | Anterior sacrum (S2–S4) | Superior greater trochanter | Laterally rotates extended hip; abducts flexed hip | Nerve to piriformis (S1–S2) | hip.lateral-rotation.P, hip.abduction.A
+Obturator internus | Inner surface of obturator membrane | Medial greater trochanter | Laterally rotates extended hip; abducts flexed hip | Nerve to obturator internus (L5–S1) | hip.lateral-rotation.P
+Obturator externus | Outer surface of obturator membrane | Trochanteric fossa of femur | Laterally rotates hip | Obturator n. (L3–L4) | hip.lateral-rotation.P, hip.adduction.A
+Superior gemellus muscle | Ischial spine | Medial greater trochanter | Laterally rotates hip | Nerve to obturator internus (L5–S1) | hip.lateral-rotation.A
+Inferior gemellus muscle | Ischial tuberosity | Medial greater trochanter | Laterally rotates hip | Nerve to quadratus femoris (L4–S1) | hip.lateral-rotation.A
+Quadratus femoris muscle | Lateral ischial tuberosity | Quadrate tubercle of femur | Laterally rotates hip | Nerve to quadratus femoris (L4–S1) | hip.lateral-rotation.P, hip.adduction.A
+Long head of biceps femoris | Ischial tuberosity | Head of fibula | Extends hip; flexes knee; laterally rotates flexed leg | Tibial n. (L5–S2) | hip.extension.P, knee.flexion.P, knee.lateral-rotation.P
+Short head of biceps femoris | Lateral lip of linea aspera | Head of fibula | Flexes knee; laterally rotates flexed leg | Common fibular n. (L5–S2) | knee.flexion.P, knee.lateral-rotation.P
+Semitendinosus muscle | Ischial tuberosity | Superomedial tibia (pes anserinus) | Extends hip; flexes knee; medially rotates flexed leg | Tibial n. (L5–S2) | hip.extension.P, knee.flexion.P, knee.medial-rotation.P
+Semimembranosus muscle | Ischial tuberosity | Posterior medial tibial condyle | Extends hip; flexes knee; medially rotates flexed leg | Tibial n. (L5–S2) | hip.extension.P, knee.flexion.P, knee.medial-rotation.P
+
+## ---- leg and foot
+Popliteus muscle | Lateral femoral condyle, lateral meniscus | Posterior tibia above soleal line | Unlocks extended knee (medial rotation of tibia); flexes knee | Tibial n. (L4–S1) | knee.medial-rotation.P, knee.flexion.A
+Plantaris muscle | Lateral supracondylar line of femur | Calcaneus (medial to Achilles tendon) | Weakly plantarflexes ankle and flexes knee | Tibial n. (S1–S2) | ankle.plantarflexion.A, knee.flexion.A
+Lateral head of gastrocnemius | Lateral femoral condyle | Calcaneus via calcaneal tendon | Plantarflexes ankle; flexes knee | Tibial n. (S1–S2) | ankle.plantarflexion.P, knee.flexion.A
+Medial head of gastrocnemius | Medial femoral condyle | Calcaneus via calcaneal tendon | Plantarflexes ankle; flexes knee | Tibial n. (S1–S2) | ankle.plantarflexion.P, knee.flexion.A
+Soleus muscle | Head and upper fibula, soleal line of tibia | Calcaneus via calcaneal tendon | Plantarflexes ankle (postural muscle) | Tibial n. (S1–S2) | ankle.plantarflexion.P
+Tibialis anterior muscle | Lateral tibial condyle, upper lateral tibia, interosseous membrane | Medial cuneiform, base of 1st metatarsal | Dorsiflexes ankle; inverts foot | Deep fibular n. (L4–L5) | ankle.dorsiflexion.P, subtalar.inversion.P
+Extensor hallucis longus | Middle anterior fibula, interosseous membrane | Dorsal base of distal phalanx of great toe | Extends great toe; dorsiflexes ankle | Deep fibular n. (L5–S1) | metatarsophalangeal.extension.P, interphalangeal-foot.extension.P, ankle.dorsiflexion.A
+Extensor digitorum longus | Lateral tibial condyle, anterior fibula, interosseous membrane | Middle and distal phalanges of toes 2–5 | Extends toes 2–5; dorsiflexes ankle | Deep fibular n. (L5–S1) | metatarsophalangeal.extension.P, interphalangeal-foot.extension.A, ankle.dorsiflexion.A, subtalar.eversion.A
+Fibularis tertius muscle | Distal anterior fibula | Dorsal base of 5th metatarsal | Dorsiflexes and everts foot | Deep fibular n. (L5–S1) | ankle.dorsiflexion.A, subtalar.eversion.A
+Fibularis longus muscle | Head and upper two-thirds of lateral fibula | Medial cuneiform, base of 1st metatarsal | Everts foot; weakly plantarflexes; supports arches | Superficial fibular n. (L5–S1) | subtalar.eversion.P, ankle.plantarflexion.A
+Fibularis brevis muscle | Lower two-thirds of lateral fibula | Tuberosity of 5th metatarsal | Everts foot; weakly plantarflexes | Superficial fibular n. (L5–S1) | subtalar.eversion.P, ankle.plantarflexion.A
+Tibialis posterior muscle | Interosseous membrane, posterior tibia and fibula | Navicular tuberosity, cuneiforms, cuboid, metatarsals 2–4 | Inverts foot; plantarflexes ankle; supports medial arch | Tibial n. (L4–L5) | subtalar.inversion.P, ankle.plantarflexion.A
+Flexor digitorum longus | Posterior tibia (medial part) | Bases of distal phalanges of toes 2–5 | Flexes toes 2–5; plantarflexes ankle | Tibial n. (L5–S1) | metatarsophalangeal.flexion.P, interphalangeal-foot.flexion.P, ankle.plantarflexion.A, subtalar.inversion.A
+Flexor hallucis longus | Posterior fibula (lower two-thirds), interosseous membrane | Plantar base of distal phalanx of great toe | Flexes great toe; plantarflexes ankle | Tibial n. (S2–S3) | interphalangeal-foot.flexion.P, metatarsophalangeal.flexion.P, ankle.plantarflexion.A
+Extensor digitorum brevis | Anterolateral calcaneus | Extensor expansions of toes 2–4 | Extends toes 2–4 | Deep fibular n. (L5–S1) | metatarsophalangeal.extension.P
+Extensor hallucis brevis | Anterolateral calcaneus | Proximal phalanx of great toe | Extends great toe at MTP | Deep fibular n. (L5–S1) | metatarsophalangeal.extension.P
+Abductor hallucis | Medial calcaneal tuberosity, flexor retinaculum | Medial base of proximal phalanx of great toe | Abducts and flexes great toe | Medial plantar n. (S1–S2) | metatarsophalangeal.abduction.P, metatarsophalangeal.flexion.A
+Flexor digitorum brevis | Medial calcaneal tuberosity, plantar aponeurosis | Middle phalanges of toes 2–5 | Flexes toes 2–5 at PIP | Medial plantar n. (S1–S2) | interphalangeal-foot.flexion.P, metatarsophalangeal.flexion.A
+Abductor digiti minimi of foot | Calcaneal tuberosity, plantar aponeurosis | Lateral base of proximal phalanx of 5th toe | Abducts and flexes little toe | Lateral plantar n. (S1–S3) | metatarsophalangeal.abduction.P
+Quadratus plantae muscle | Medial and lateral surfaces of calcaneus | Tendon of flexor digitorum longus | Assists flexor digitorum longus; straightens its pull | Lateral plantar n. (S2–S3) | metatarsophalangeal.flexion.A
+Lumbrical muscles of foot | Tendons of flexor digitorum longus | Medial side of extensor expansions, toes 2–5 | Flex MTP joints; extend IP joints | Medial and lateral plantar nn. (S2–S3) | metatarsophalangeal.flexion.P, interphalangeal-foot.extension.A
+Medial head of flexor hallucis brevis | Cuboid, lateral cuneiform | Base of proximal phalanx of great toe (medial sesamoid) | Flexes great toe at MTP | Medial plantar n. (S1–S2) | metatarsophalangeal.flexion.P
+Lateral head of flexor hallucis brevis | Cuboid, lateral cuneiform | Base of proximal phalanx of great toe (lateral sesamoid) | Flexes great toe at MTP | Medial plantar n. (S1–S2) | metatarsophalangeal.flexion.P
+Oblique head of adductor hallucis | Bases of metatarsals 2–4, cuboid, lateral cuneiform | Lateral base of proximal phalanx of great toe | Adducts great toe; supports transverse arch | Lateral plantar n., deep branch (S2–S3) | metatarsophalangeal.adduction.P
+Transverse head of adductor hallucis | Capsules of MTP joints of toes 3–5 | Lateral base of proximal phalanx of great toe | Adducts great toe; supports transverse arch | Lateral plantar n., deep branch (S2–S3) | metatarsophalangeal.adduction.P
+Flexor digiti minimi of foot | Base of 5th metatarsal | Base of proximal phalanx of 5th toe | Flexes little toe | Lateral plantar n. (S2–S3) | metatarsophalangeal.flexion.P
+(Opponens digiti minimi muscle of foot) | Long plantar ligament, base of 5th metatarsal | Lateral 5th metatarsal | Draws 5th metatarsal plantar-medially | Lateral plantar n. (S2–S3) |
+Dorsal interossei muscles of foot | Adjacent sides of metatarsals | Proximal phalanges of toes 2–4, extensor expansions | Abduct toes 2–4 from 2nd toe; flex MTP | Lateral plantar n. (S2–S3) | metatarsophalangeal.abduction.P, metatarsophalangeal.flexion.A
+Plantar interossei muscles | Medial sides of metatarsals 3–5 | Medial base of proximal phalanx, toes 3–5 | Adduct toes 3–5 toward 2nd toe; flex MTP | Lateral plantar n. (S2–S3) | metatarsophalangeal.adduction.P, metatarsophalangeal.flexion.A
+
+## ---- trunk
+Rectus abdominis muscle | Pubic crest and symphysis | Xiphoid process, costal cartilages 5–7 | Flexes trunk; compresses abdomen; tilts pelvis posteriorly | Thoracoabdominal nn. (T7–T11); subcostal n. (T12) | lumbar-spine.flexion.P, thoracic-spine.flexion.P
+External abdominal oblique muscle | External surfaces of ribs 5–12 | Linea alba, pubic tubercle, anterior iliac crest | Flexes trunk; lateral flexion; rotates trunk to opposite side | Intercostal nn. (T7–T11); subcostal n. (T12) | lumbar-spine.rotation.P, thoracic-spine.rotation.P, lumbar-spine.lateral-flexion.P, lumbar-spine.flexion.A
+Internal abdominal oblique muscle | Thoracolumbar fascia, iliac crest, inguinal ligament | Ribs 10–12, linea alba, pubic crest (conjoint tendon) | Flexes trunk; lateral flexion; rotates trunk to same side | Intercostal nn. (T7–T12); iliohypogastric and ilioinguinal nn. (L1) | lumbar-spine.rotation.P, thoracic-spine.rotation.P, lumbar-spine.lateral-flexion.P, lumbar-spine.flexion.A
+Transversus abdominis muscle | Costal cartilages 7–12, thoracolumbar fascia, iliac crest | Linea alba, pubic crest (conjoint tendon) | Compresses abdomen; stabilises trunk | Thoracoabdominal nn. (T7–T11); iliohypogastric and ilioinguinal nn. (L1) |
+Pyramidalis muscle | Anterior pubis | Linea alba | Tenses linea alba | Subcostal n. (T12) |
+Quadratus lumborum muscle | Iliac crest, iliolumbar ligament | 12th rib, transverse processes of L1–L4 | Laterally flexes lumbar spine; fixes 12th rib | Anterior rami of T12–L4 | lumbar-spine.lateral-flexion.P, lumbar-spine.extension.A
+Iliocostalis lumborum muscle | Sacrum, iliac crest, thoracolumbar fascia | Angles of ribs 6–12 | Extends and laterally flexes spine | Dorsal rami of spinal nn. | lumbar-spine.extension.P, lumbar-spine.lateral-flexion.P, thoracic-spine.extension.A
+Iliocostalis thoracis muscle | Angles of ribs 7–12 | Angles of ribs 1–6, transverse process of C7 | Extends and laterally flexes thoracic spine | Dorsal rami of spinal nn. | thoracic-spine.extension.P, thoracic-spine.lateral-flexion.P
+Iliocostalis colli muscle | Angles of ribs 3–6 | Transverse processes of C4–C6 | Extends and laterally flexes neck | Dorsal rami of spinal nn. | cervical-spine.extension.P, cervical-spine.lateral-flexion.P
+Longissimus thoracis muscle | Common tendon, lumbar and lower thoracic transverse processes | Transverse processes T1–T12, ribs 3–12 | Extends and laterally flexes spine | Dorsal rami of spinal nn. | thoracic-spine.extension.P, lumbar-spine.extension.P, thoracic-spine.lateral-flexion.P
+Longissimus colli muscle | Transverse processes of T1–T5 | Transverse processes of C2–C6 | Extends and laterally flexes neck | Dorsal rami of spinal nn. | cervical-spine.extension.P, cervical-spine.lateral-flexion.P
+Longissimus capitis muscle | Transverse processes T1–T5, articular processes C4–C7 | Mastoid process | Extends head and neck; rotates head to same side | Dorsal rami of spinal nn. | cervical-spine.extension.P, atlanto-occipital.extension.A, cervical-spine.lateral-flexion.A
+Spinalis thoracis muscle | Spinous processes T11–L2 | Spinous processes T1–T8 | Extends thoracic spine | Dorsal rami of spinal nn. | thoracic-spine.extension.P
+Spinalis colli muscle | Nuchal ligament, spinous processes C7–T2 | Spinous process of axis | Extends neck | Dorsal rami of spinal nn. | cervical-spine.extension.P
+Spinalis capitis muscle | Spinous processes lower cervical and upper thoracic vertebrae | Occipital bone (with semispinalis capitis) | Extends head and neck | Dorsal rami of spinal nn. | cervical-spine.extension.P
+Semispinalis thoracis muscle | Transverse processes T6–T10 | Spinous processes C6–T4 | Extends thoracic spine; rotates to opposite side | Dorsal rami of spinal nn. | thoracic-spine.extension.P, thoracic-spine.rotation.A
+Semispinalis colli muscle | Transverse processes T1–T6 | Spinous processes C2–C5 | Extends neck; rotates to opposite side | Dorsal rami of spinal nn. | cervical-spine.extension.P, cervical-spine.rotation.A
+Multifidus lumborum muscle | Sacrum, posterior superior iliac spine, mamillary processes L1–L5 | Spinous processes 2–4 segments above | Extends and stabilises spine; rotates to opposite side | Dorsal rami of spinal nn. | lumbar-spine.extension.A, lumbar-spine.rotation.A
+Multifidus thoracis muscle | Transverse processes T1–T12 | Spinous processes 2–4 segments above | Extends and stabilises spine; rotates to opposite side | Dorsal rami of spinal nn. | thoracic-spine.extension.A, thoracic-spine.rotation.A
+Multifidus colli muscle | Articular processes C4–C7 | Spinous processes 2–4 segments above | Extends and stabilises neck; rotates to opposite side | Dorsal rami of spinal nn. | cervical-spine.extension.A, cervical-spine.rotation.A
+Rotatores | Transverse process of each vertebra | Spinous process of vertebra above | Rotate and extend spine; proprioceptive role | Dorsal rami of spinal nn. | thoracic-spine.rotation.A
+Interspinales lumborum muscles | Spinous process | Spinous process of vertebra above | Extend and stabilise lumbar spine | Dorsal rami of spinal nn. | lumbar-spine.extension.A
+Interspinales thoracis muscles | Spinous process | Spinous process of vertebra above | Extend and stabilise thoracic spine | Dorsal rami of spinal nn. | thoracic-spine.extension.A
+Interspinales colli muscles | Spinous process | Spinous process of vertebra above | Extend and stabilise neck | Dorsal rami of spinal nn. | cervical-spine.extension.A
+Dorsal parts of lateral intertransversarii lumborum muscles | Transverse process | Transverse process above | Laterally flex and stabilise lumbar spine | Dorsal rami of spinal nn. | lumbar-spine.lateral-flexion.A
+Ventral parts of lateral intertransversarii lumborum muscles | Transverse process | Transverse process above | Laterally flex and stabilise lumbar spine | Ventral rami of spinal nn. | lumbar-spine.lateral-flexion.A
+Levatores breves costarum | Transverse processes C7–T11 | Rib below (angle) | Elevate ribs; extend and laterally flex spine | Dorsal rami of C8–T11 |
+Levatores longi costarum | Transverse processes C7–T11 | Rib two below (angle) | Elevate ribs; extend and laterally flex spine | Dorsal rami of C8–T11 |
+Serratus posterior superior muscle | Nuchal ligament, spinous processes C7–T3 | Upper borders of ribs 2–5 | Elevates ribs | Intercostal nn. (T1–T4) | thoracic-cage.pump-handle.A
+Serratus posterior inferior muscle | Spinous processes T11–L2 | Lower borders of ribs 9–12 | Depresses ribs | Intercostal nn. (T9–T12) |
+External intercostal muscles | Lower border of rib above | Upper border of rib below | Elevate ribs (inspiration); stiffen intercostal space | Intercostal nn. (T1–T11) | thoracic-cage.pump-handle.P, thoracic-cage.bucket-handle.P
+Internal intercostal muscles | Costal groove of rib above | Upper border of rib below | Depress ribs (forced expiration); stiffen intercostal space | Intercostal nn. (T1–T11) |
+Innermost intercostal muscles | Inner surface of rib above | Inner surface of rib below | Depress ribs; stiffen intercostal space | Intercostal nn. (T1–T11) |
+Transversus thoracis muscle | Posterior xiphoid and lower sternum | Costal cartilages 2–6 | Depresses ribs (forced expiration) | Intercostal nn. (T2–T6) |
+Diaphragm | Xiphoid process, costal cartilages 7–12, L1–L3 (crura) | Central tendon | Main muscle of inspiration; lowers and flattens dome | Phrenic n. (C3–C5) | thoracic-cage.bucket-handle.P, thoracic-cage.pump-handle.A
+
+## ---- neck
+Scalenus anterior muscle | Anterior tubercles of C3–C6 | Scalene tubercle of 1st rib | Elevates 1st rib; flexes and laterally flexes neck | Anterior rami of C4–C6 | cervical-spine.lateral-flexion.P, cervical-spine.flexion.A, thoracic-cage.pump-handle.A
+Scalenus medius muscle | Transverse processes of C2–C7 | 1st rib, behind subclavian groove | Elevates 1st rib; laterally flexes neck | Anterior rami of C3–C8 | cervical-spine.lateral-flexion.P, thoracic-cage.pump-handle.A
+Scalenus posterior muscle | Transverse processes of C4–C6 | Outer surface of 2nd rib | Elevates 2nd rib; laterally flexes neck | Anterior rami of C6–C8 | cervical-spine.lateral-flexion.P, thoracic-cage.pump-handle.A
+Sternocleidomastoid muscle | Manubrium, medial third of clavicle | Mastoid process, lateral superior nuchal line | Laterally flexes neck (same side), rotates it to opposite side; both sides flex neck | Accessory n. (CN XI); C2–C3 | cervical-spine.lateral-flexion.P, cervical-spine.rotation.P, cervical-spine.flexion.P, atlanto-occipital.extension.A
+Longus colli muscle | Anterior tubercles and bodies of C3–T3 | Anterior arch of atlas, bodies of C2–C4 | Flexes neck; assists rotation | Anterior rami of C2–C6 | cervical-spine.flexion.P, cervical-spine.rotation.A
+Longus capitis muscle | Anterior tubercles of C3–C6 | Basilar part of occipital bone | Flexes head and neck | Anterior rami of C1–C3 | atlanto-occipital.flexion.P, cervical-spine.flexion.A
+Rectus anterior capitis muscle | Lateral mass of atlas | Basilar part of occipital bone | Flexes head at atlanto-occipital joint | Anterior rami of C1–C2 | atlanto-occipital.flexion.P
+Rectus lateralis capitis muscle | Transverse process of atlas | Jugular process of occipital bone | Laterally flexes head | Anterior rami of C1–C2 | atlanto-occipital.lateral-flexion.P
+Rectus posterior major capitis muscle | Spinous process of axis | Lateral inferior nuchal line | Extends head; rotates it to same side | Suboccipital n. (C1) | atlanto-occipital.extension.P, atlanto-axial.rotation.A
+Rectus posterior minor capitis muscle | Posterior tubercle of atlas | Medial inferior nuchal line | Extends head | Suboccipital n. (C1) | atlanto-occipital.extension.P
+Obliquus superior capitis muscle | Transverse process of atlas | Occipital bone above inferior nuchal line | Extends head; laterally flexes it | Suboccipital n. (C1) | atlanto-occipital.extension.P, atlanto-occipital.lateral-flexion.A
+Obliquus inferior capitis muscle | Spinous process of axis | Transverse process of atlas | Rotates atlas (head turns to same side) | Suboccipital n. (C1) | atlanto-axial.rotation.P
+Splenius capitis muscle | Nuchal ligament, spinous processes C7–T3 | Mastoid process, lateral superior nuchal line | Extends head and neck; rotates and laterally flexes to same side | Dorsal rami of C2–C5 | cervical-spine.extension.P, cervical-spine.rotation.P, cervical-spine.lateral-flexion.P
+Splenius colli muscle | Spinous processes T3–T6 | Transverse processes of C1–C3 | Extends neck; rotates and laterally flexes to same side | Dorsal rami of C2–C5 | cervical-spine.extension.P, cervical-spine.rotation.P, cervical-spine.lateral-flexion.P
+Sternohyoid muscle | Manubrium, medial clavicle | Body of hyoid | Depresses hyoid | Ansa cervicalis (C1–C3) |
+Sternothyroid muscle | Posterior manubrium | Oblique line of thyroid cartilage | Depresses larynx | Ansa cervicalis (C2–C3) |
+Thyrohyoid muscle | Oblique line of thyroid cartilage | Greater horn and body of hyoid | Depresses hyoid or elevates larynx | C1 via hypoglossal n. |
+Omohyoid muscle | Superior border of scapula | Body of hyoid (lateral part) | Depresses and retracts hyoid | Ansa cervicalis (C1–C3) |
+Anterior belly of digastric muscle | Digastric fossa of mandible | Intermediate tendon, hyoid | Depresses mandible; elevates hyoid | Nerve to mylohyoid (CN V3) | temporomandibular.depression.P
+Posterior belly of digastric muscle | Mastoid notch of temporal bone | Intermediate tendon, hyoid | Elevates and retracts hyoid | Facial n. (CN VII) |
+Mylohyoid muscle | Mylohyoid line of mandible | Body of hyoid, median raphe | Elevates hyoid and floor of mouth; depresses mandible | Nerve to mylohyoid (CN V3) | temporomandibular.depression.A
+Geniohyoid muscle | Inferior mental spine of mandible | Body of hyoid | Pulls hyoid forward and up; depresses mandible | C1 via hypoglossal n. | temporomandibular.depression.A
+Stylohyoid muscle | Styloid process | Body of hyoid | Elevates and retracts hyoid | Facial n. (CN VII) |
+Platysma | Fascia over pectoralis major and deltoid | Lower border of mandible, skin of lower face | Depresses mandible and lower lip; tenses neck skin | Cervical branch of facial n. (CN VII) | temporomandibular.depression.A
+
+## ---- mastication, face, orbit, tongue
+Temporalis muscle | Temporal fossa and fascia | Coronoid process and anterior ramus of mandible | Elevates and retracts mandible | Deep temporal nn. (CN V3) | temporomandibular.elevation.P, temporomandibular.retrusion.P
+Superficial part of masseter | Anterior two-thirds of zygomatic arch | Lateral ramus and angle of mandible | Elevates and protrudes mandible | Masseteric n. (CN V3) | temporomandibular.elevation.P, temporomandibular.protrusion.A
+Deep part of masseter | Posterior third of zygomatic arch | Upper ramus and coronoid process | Elevates and retracts mandible | Masseteric n. (CN V3) | temporomandibular.elevation.P, temporomandibular.retrusion.A
+Medial pterygoid muscle | Medial surface of lateral pterygoid plate, palatine bone | Medial surface of ramus and angle of mandible | Elevates mandible; assists protrusion and side-to-side grinding | Medial pterygoid n. (CN V3) | temporomandibular.elevation.P, temporomandibular.protrusion.A, temporomandibular.lateral-excursion.A
+Superior head of lateral pterygoid muscle | Infratemporal surface of greater wing of sphenoid | Articular disc and capsule of TMJ | Steadies the disc during closing | Lateral pterygoid n. (CN V3) |
+Inferior head of lateral pterygoid muscle | Lateral surface of lateral pterygoid plate | Pterygoid fovea of mandibular neck | Protrudes and depresses mandible; moves it to opposite side | Lateral pterygoid n. (CN V3) | temporomandibular.protrusion.P, temporomandibular.depression.A, temporomandibular.lateral-excursion.P
+Frontalis muscle | Epicranial aponeurosis | Skin of eyebrows and forehead | Raises eyebrows; wrinkles forehead | Facial n. (CN VII) |
+Occipitalis muscle | Highest nuchal line, mastoid process | Epicranial aponeurosis | Retracts scalp | Facial n. (CN VII) |
+Temporoparietalis muscle | Temporal fascia | Epicranial aponeurosis | Tenses scalp; raises ears | Facial n. (CN VII) |
+Procerus muscle | Nasal bone, lateral nasal cartilage | Skin between eyebrows | Draws medial eyebrows down (frown) | Facial n. (CN VII) |
+Corrugator supercilii | Medial superciliary arch | Skin of eyebrow | Draws eyebrows together and down | Facial n. (CN VII) |
+Orbital part of orbicularis oculi | Medial orbital margin, medial palpebral ligament | Circles orbit, blends at lateral palpebral raphe | Tightly closes eyelids | Facial n. (CN VII) |
+Palpebral part of orbicularis oculi | Medial palpebral ligament | Lateral palpebral raphe | Gently closes eyelids (blink) | Facial n. (CN VII) |
+Nasalis muscle | Maxilla (lateral to nasal notch) | Nasal cartilage, nasal aponeurosis | Compresses nostrils; flares nostrils | Facial n. (CN VII) |
+Depressor septi nasi | Maxilla above central incisor | Nasal septum, alar cartilage | Pulls nasal septum down | Facial n. (CN VII) |
+Levator labii superioris | Infra-orbital margin | Skin and muscle of upper lip | Elevates upper lip | Facial n. (CN VII) |
+Levator anguli oris | Canine fossa of maxilla | Modiolus at angle of mouth | Elevates angle of mouth (smile) | Facial n. (CN VII) |
+Zygomaticus major muscle | Zygomatic bone | Modiolus at angle of mouth | Draws angle of mouth up and back (smile) | Facial n. (CN VII) |
+Zygomaticus minor muscle | Zygomatic bone (lateral surface) | Upper lip | Elevates upper lip | Facial n. (CN VII) |
+Risorius muscle | Parotid fascia | Modiolus at angle of mouth | Retracts angle of mouth | Facial n. (CN VII) |
+Depressor anguli oris | Oblique line of mandible | Modiolus at angle of mouth | Depresses angle of mouth | Facial n. (CN VII) |
+Depressor labii inferioris | Oblique line of mandible | Skin of lower lip | Depresses lower lip | Facial n. (CN VII) |
+Mentalis muscle | Incisive fossa of mandible | Skin of chin | Raises and protrudes lower lip | Facial n. (CN VII) |
+Orbicularis oris muscle | Modiolus, maxilla and mandible | Lips | Closes and purses lips | Facial n. (CN VII) |
+Bucinator | Alveolar processes, pterygomandibular raphe | Modiolus, lips | Compresses cheek against teeth (blowing, chewing) | Facial n., buccal branches (CN VII) |
+Levator palpebrae superioris | Lesser wing of sphenoid | Upper eyelid (tarsal plate, skin) | Elevates upper eyelid | Oculomotor n. (CN III) |
+Superior rectus muscle | Common tendinous ring | Superior sclera | Elevates, adducts and intorts eye | Oculomotor n. (CN III) |
+Inferior rectus muscle | Common tendinous ring | Inferior sclera | Depresses, adducts and extorts eye | Oculomotor n. (CN III) |
+Medial rectus muscle | Common tendinous ring | Medial sclera | Adducts eye | Oculomotor n. (CN III) |
+Lateral rectus muscle | Common tendinous ring | Lateral sclera | Abducts eye | Abducens n. (CN VI) |
+Superior oblique muscle | Body of sphenoid (above optic canal) | Sclera via trochlea (posterolateral) | Intorts, depresses and abducts eye | Trochlear n. (CN IV) |
+Inferior oblique muscle | Orbital surface of maxilla | Lateral sclera (posterior) | Extorts, elevates and abducts eye | Oculomotor n. (CN III) |
+Genioglossus muscle | Superior mental spine of mandible | Tongue (whole length), hyoid | Protrudes and depresses tongue | Hypoglossal n. (CN XII) |
+Hyoglossus muscle | Body and greater horn of hyoid | Side of tongue | Depresses and retracts tongue | Hypoglossal n. (CN XII) |
+
+## ---- pharynx, larynx, pelvic floor
+Superior pharyngeal constrictor | Pterygoid hamulus, pterygomandibular raphe, mylohyoid line | Pharyngeal raphe | Constricts pharynx (swallowing) | Pharyngeal plexus (CN X) |
+Middle pharyngeal constrictor | Greater and lesser horns of hyoid, stylohyoid ligament | Pharyngeal raphe | Constricts pharynx (swallowing) | Pharyngeal plexus (CN X) |
+Inferior pharyngeal constrictor | Thyroid and cricoid cartilages | Pharyngeal raphe | Constricts pharynx (swallowing) | Pharyngeal plexus (CN X); external laryngeal n. |
+Palatopharyngeus muscle | Hard palate, palatine aponeurosis | Pharyngeal wall, thyroid cartilage | Elevates pharynx and larynx; closes nasopharynx | Pharyngeal plexus (CN X) |
+Stylopharyngeus muscle | Styloid process | Pharyngeal wall, thyroid cartilage | Elevates pharynx and larynx | Glossopharyngeal n. (CN IX) |
+Posterior crico-arytenoid muscle | Posterior surface of cricoid lamina | Muscular process of arytenoid | Abducts vocal folds (opens glottis) | Recurrent laryngeal n. (CN X) |
+Lateral crico-arytenoid muscle | Arch of cricoid cartilage | Muscular process of arytenoid | Adducts vocal folds | Recurrent laryngeal n. (CN X) |
+Transverse arytenoid muscle | Posterior surface of arytenoid | Opposite arytenoid | Adducts arytenoids (closes back of glottis) | Recurrent laryngeal n. (CN X) |
+Ary-epiglottic part of oblique arytenoid muscle | Posterior surface of arytenoid | Apex of opposite arytenoid, aryepiglottic fold | Narrows laryngeal inlet | Recurrent laryngeal n. (CN X) |
+External part of thyro-arytenoid muscle | Inner surface of thyroid angle | Anterolateral arytenoid | Relaxes and shortens vocal folds | Recurrent laryngeal n. (CN X) |
+Thyro-epiglottic part of thyro-arytenoid muscle | Inner surface of thyroid angle | Epiglottis, aryepiglottic fold | Widens laryngeal inlet | Recurrent laryngeal n. (CN X) |
+Straight part of cricothyroid muscle | Anterior cricoid arch | Lower border of thyroid lamina | Tenses vocal folds (raises pitch) | External laryngeal n. (CN X) |
+Oblique part of cricothyroid muscle | Anterior cricoid arch | Inferior horn of thyroid cartilage | Tenses vocal folds (raises pitch) | External laryngeal n. (CN X) |
+Pubococcygeus muscle | Posterior pubis, tendinous arch | Coccyx, anococcygeal raphe | Supports pelvic viscera; holds continence | Nerve to levator ani (S3–S4); pudendal n. |
+Iliococcygeus muscle | Tendinous arch of levator ani | Coccyx, anococcygeal raphe | Supports pelvic viscera | Nerve to levator ani (S3–S4) |
+Pubo-analis muscle | Posterior pubis | Anal canal wall | Supports and lifts anal canal | Nerve to levator ani (S3–S4) |
+Coccygeus muscle | Ischial spine | Lateral coccyx and lower sacrum | Supports pelvic floor; flexes coccyx | Anterior rami of S4–S5 |
+External anal sphincter | Perineal body, coccyx | Encircles anal canal | Closes anal canal (voluntary) | Pudendal n., inferior rectal branch (S2–S4) |

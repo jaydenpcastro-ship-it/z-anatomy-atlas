@@ -1,0 +1,73 @@
+/* motion module: on-stage caption + labels, and the Motion tab in the info panel */
+
+/* ---------- labels that follow 3D points (positioned by motion.js via transform) ---------- */
+.mo-lab { position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap; font-size: 12px; line-height: 1.25; font-weight: 600;
+  padding: 2px 7px; border-radius: 4px; color: #eef3f9; background: rgba(10, 14, 20, .82); border-left: 3px solid #9fb3c8;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, .35); will-change: transform; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.mo-lab.ax { border-color: #ffd166; color: #ffe29a; }
+.mo-lab.theta { border-color: #ff6b6b; font-size: 15px; padding: 3px 9px; color: #fff; }
+.mo-lab.dim { border-color: transparent; background: rgba(10, 14, 20, .6); color: #b8c6d6; font-weight: 500; font-size: 11px; }
+.mo-lab.fixed { border-color: #cfd8e3; }
+.mo-lab.moving { border-color: #2d8cff; }
+.mo-lab.origin { border-color: #ff7a3d; color: #ffb48f; }
+.mo-lab.ins { border-color: #4aa3ff; color: #a9d0ff; }
+.mo-lab.pull { border-color: #ff8a80; max-width: 340px; }
+.mo-lab.roll { border-color: #3ddc97; color: #8ff0c6; }
+.mo-lab.glide { border-color: #ff9f43; color: #ffc98f; }
+.mo-lab.spin { border-color: #c792ea; color: #e2c4f6; }
+.mo-lab.convex, .mo-lab.concave { border-color: #8fb7ff; font-weight: 500; }
+.mo-lab.ghost { border-color: #3ddc97; background: rgba(10, 20, 16, .75); font-weight: 500; font-size: 11px; }
+:root[data-theme="light"] .mo-lab { background: rgba(255, 255, 255, .9); color: #16202c; }
+:root[data-theme="light"] .mo-lab.theta { color: #16202c; }
+
+/* ---------- caption on the stage ---------- */
+.mo-hud { position: absolute; top: 12px; right: 12px; z-index: 4; width: 250px; padding: 9px 11px 10px; border-radius: var(--radius);
+  background: rgba(16, 21, 29, .9); border: 1px solid var(--line); backdrop-filter: blur(5px); box-shadow: 0 4px 18px rgba(0, 0, 0, .35); }
+:root[data-theme="light"] .mo-hud { background: rgba(255, 255, 255, .92); }
+.mo-hud-top { display: flex; align-items: center; gap: 6px; }
+.mo-hud-top b { flex: 1; font-size: 13.5px; line-height: 1.25; }
+.mo-mini { width: 24px; height: 24px; padding: 0; border-radius: 6px; border: 1px solid var(--line); background: var(--panel2); font-size: 11px; line-height: 1; }
+.mo-mini:hover { border-color: var(--accent); }
+.mo-hud-sub { color: var(--muted); font-size: 11.5px; margin: 2px 0 0; }
+.mo-hud-mid { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.mo-theta { font-size: 24px; font-weight: 700; color: #ff8080; font-variant-numeric: tabular-nums; min-width: 4.4ch; }
+.mo-range { color: var(--muted); font-size: 11.5px; text-align: right; }
+.mo-bar { position: relative; height: 6px; margin-top: 6px; border-radius: 3px; background: var(--panel2); border: 1px solid var(--line); }
+.mo-bar i { position: absolute; top: -1px; bottom: -1px; background: rgba(94, 234, 212, .32); border-radius: 3px; }
+.mo-bar em { position: absolute; top: -4px; width: 3px; height: 12px; margin-left: -1.5px; background: #ff6b6b; border-radius: 2px; }
+
+/* ---------- Motion tab ---------- */
+.mo h3 { margin-top: 14px; }
+.mo-chip { cursor: pointer; }
+.mo-chip.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.mo-chip.prime:not(.on) { border-width: 2px; }
+.mo-player { margin-top: 12px; padding: 9px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel2); display: grid; gap: 8px; }
+.mo-prow { display: flex; align-items: center; gap: 10px; }
+.mo-prow2 { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mo-play { min-width: 92px; font-weight: 600; }
+.mo-scrub { flex: 1; min-width: 0; accent-color: var(--accent); }
+.mo-loop { color: var(--muted); font-size: 12.5px; display: flex; align-items: center; gap: 4px; }
+.seg { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 2px; gap: 2px; }
+.seg button { background: none; border: 0; border-radius: 5px; padding: 4px 9px; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.seg button:hover { color: var(--text); }
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+.mo-toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.mo-kv { margin: 8px 0 0; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.mo-row { display: grid; grid-template-columns: 92px 1fr; background: var(--panel); }
+.mo-row dt { padding: 6px 8px 6px 10px; background: var(--panel2); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; font-weight: 600; }
+.mo-row dd { margin: 0; padding: 6px 10px; line-height: 1.35; min-width: 0; }
+.mo-kv2 { margin-top: 12px; }
+.mo-rule { grid-column: 1 / -1; background: var(--panel); padding: 7px 10px; border-left: 3px solid #ff9f43; font-size: 12.5px; }
+.mo-note { color: var(--muted); font-size: 12.5px; margin: 10px 0 0; line-height: 1.45; }
+.mo-muscle p { margin: 6px 0; }
+.mo-ends { display: grid; gap: 6px; }
+.mo-ends span { display: block; padding: 6px 10px; border-radius: 6px; background: var(--panel2); border-left: 3px solid #ff7a3d; }
+.mo-ends span.i { border-left-color: #4aa3ff; }
+.mo-ends i { display: block; font-style: normal; font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+
+@media (max-width: 760px) {
+  .mo-hud { top: auto; bottom: 10px; right: 10px; left: 10px; width: auto; }
+  .mo-theta { font-size: 20px; }
+  .mo-lab { font-size: 11px; max-width: 190px; }
+  .mo-lab.theta { font-size: 13px; }
+}

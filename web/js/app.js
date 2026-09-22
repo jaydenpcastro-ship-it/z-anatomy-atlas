@@ -56,8 +56,9 @@ const S = {
   counts: new Map(),
   sys: new Map(),  // key -> { group, loaded, loading, visible, progress }
   meshes: new Map(), // id -> Mesh[]
-  sel: new Set(), cur: null, curLm: null, ghost: false, iso: false, pins: false,
+  sel: new Set(), cur: null, curLm: null, ghost: false, iso: false, pins: false, tab: null,
   desc: new Map(),
+  wholes: new Map(),      // `${system}|${muscle}` -> every head/part record of a muscle whose parts are separate structures
 };
 const nameOf = (r) => (S.lang === 'en' ? r.name : (S.i18n[r.name.toLowerCase()]?.[S.lang] || r.name));
 const latinOf = (r) => S.i18n[r.name.toLowerCase()]?.la || '';
@@ -83,7 +84,7 @@ const rim = new THREE.DirectionalLight(0xbcd4ff, 0.7); rim.position.set(2, 1, -2
 const controls = new OrbitControls(camera, canvas);
 controls.target.set(0, 0.87, 0);
 controls.enableDamping = true; controls.dampingFactor = 0.12; controls.screenSpacePanning = true;
-controls.minDistance = 0.05; controls.maxDistance = 12;
+controls.minDistance = 0.004; controls.maxDistance = 12;   // structures range from 1.8 m (body) to 3 mm (stapes): zoom must reach both
 let dirty = true;
 controls.addEventListener('change', () => { dirty = true; });
 const world = new THREE.Group(); scene.add(world);
@@ -93,10 +94,35 @@ function resize() {
   renderer.setSize(w, h, false); camera.aspect = w / Math.max(h, 1); camera.updateProjectionMatrix(); dirty = true;
 }
 new ResizeObserver(resize).observe(stage); resize();
-(function loop() {
+
+// Per-frame hooks for the study / motion modules. frameHooks run before the render and return true to force a redraw
+// (an animation is running); afterHooks run after it (DOM overlays that follow 3D points read the final camera).
+const frameHooks = new Set(), afterHooks = new Set();
+// The near plane follows the zoom distance so a 3 mm structure can be filled with the frame without clipping,
+// while the whole body keeps the depth precision it had with a fixed 2 cm near plane.
+function autoNear() {
+  const near = THREE.MathUtils.clamp(camera.position.distanceTo(controls.target) * 0.04, 0.001, 0.02);
+  if (Math.abs(near - camera.near) > camera.near * 0.05) { camera.near = near; camera.updateProjectionMatrix(); dirty = true; }
+}
+let lastFrame = performance.now();
+(function loop(now) {
   requestAnimationFrame(loop);
-  if (controls.update() || dirty) { renderer.render(scene, camera); dirty = false; }
-})();
+  const dt = Math.min((now - lastFrame) / 1000, 0.1); lastFrame = now;
+  let need = controls.update();
+  for (const f of frameHooks) if (f(dt, now)) need = true;
+  autoNear();
+  const draw = need || dirty;
+  if (draw) { renderer.render(scene, camera); dirty = false; }
+  for (const f of afterHooks) f(draw);
+})(performance.now());
+// world point -> pixels inside #stage (for labels / pins drawn as DOM); visible = in front of the camera and inside the frame
+const _pv = new THREE.Vector3();
+function project(v, out = {}) {
+  _pv.copy(v).project(camera);
+  out.x = (_pv.x * 0.5 + 0.5) * stage.clientWidth; out.y = (-_pv.y * 0.5 + 0.5) * stage.clientHeight; out.z = _pv.z;
+  out.visible = _pv.z > -1 && _pv.z < 1 && _pv.x > -1.05 && _pv.x < 1.05 && _pv.y > -1.05 && _pv.y < 1.05;
+  return out;
+}
 
 const draco = new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/draco/gltf/');
 const gltfLoader = new GLTFLoader().setDRACOLoader(draco);
@@ -185,7 +211,9 @@ async function setSystemVisible(k, on) {
 let tween = null;
 function flyTo(center, radius, dir) {
   const d = (dir || camera.position.clone().sub(controls.target)).clone().normalize();
-  const dist = Math.max(radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * 1.2, 0.15);
+  // fit the bounding sphere in the narrower of the vertical / horizontal field of view, so wide selections are not cropped on a tall stage
+  const vHalf = THREE.MathUtils.degToRad(camera.fov / 2), hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
+  const dist = Math.max(radius / Math.sin(Math.min(vHalf, hHalf)) * 1.15, 0.012);
   const to = { p: center.clone().add(d.multiplyScalar(dist)), t: center.clone() };
   const from = { p: camera.position.clone(), t: controls.target.clone() }, t0 = performance.now();
   tween = { from, to, t0, dur: reduce() ? 1 : 600 };
@@ -266,7 +294,7 @@ function pickAt(e, forHover) {
 }
 const tip = $('#tip');
 canvas.addEventListener('pointermove', (e) => {
-  if (e.buttons || !hoverOk) { tip.hidden = true; return; }
+  if (e.buttons || !hoverOk || atlas.pickHandler) { tip.hidden = true; return; }   // quiz mode must not leak names through the hover tip
   const now = performance.now(); if (now - lastHover < 90) return; lastHover = now;
   const { rec, lm } = pickAt(e, true);
   const label = lm ? `${lm.name} (landmark)` : rec ? nameOf(rec) + (rec.side ? ` (${rec.side.toUpperCase()})` : '') : null;
@@ -280,6 +308,7 @@ canvas.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clie
 canvas.addEventListener('pointerup', (e) => {
   if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return;
   const { rec, lm } = pickAt(e, false);
+  if (atlas.pickHandler) { atlas.pickHandler(rec, lm, e); return; }   // study mode takes over clicks (no info panel, no selection)
   if (lm) { const t = S.byId.get(lm.target); if (t) { selectRec(t, { focus: false }); showLandmark(lm); } }
   else if (rec) selectRec(rec, { focus: false });
   else clearSel();
@@ -287,13 +316,26 @@ canvas.addEventListener('pointerup', (e) => {
 
 // -------------------------------------------------------------- selection ---
 function siblingsOf(rec) { return S.siblings.get(`${rec.system}|${rec.group}|${rec.name}`) || [rec]; }
+// A muscle with several heads/parts is one anatomical unit. Isolate and its zoom act on the whole muscle, not on one head:
+// either the muscle has its own group ("Biceps brachii muscle.g" holds both heads) or its parts are named "<Part> head|part|belly of <muscle>".
+const WHOLE_GROUP = /^(?!Muscles).+ muscle$|^Levator ani$/i;
+const partBase = (name) => { const m = name.match(/^[^(]+? (?:head|part|belly) of (.+)$/i); return m ? m[1].replace(/ muscle$/i, '').toLowerCase() : null; };
+function wholeOf(rec) {
+  const sib = siblingsOf(rec);
+  if (rec.system !== 'muscular') return sib;
+  const g = S.groups.get(rec.group);
+  if (g && WHOLE_GROUP.test(g.name)) { const all = groupStructures(rec.system, g.id); if (all.length) return all; }
+  const b = partBase(rec.name), parts = b && S.wholes.get(`${rec.system}|${b}`);
+  return parts && parts.length > sib.length ? parts : sib;
+}
 async function selectRec(rec, { focus = true } = {}) {
   const sib = siblingsOf(rec);
-  S.cur = rec; S.curLm = null; S.sel = new Set(sib.map((r) => r.id));
+  const shown = S.iso ? wholeOf(rec) : sib;   // while isolating, a click isolates the whole muscle
+  S.cur = rec; S.curLm = null; S.sel = new Set(shown.map((r) => r.id));
   if (!S.sys.get(rec.system)?.visible) await setSystemVisible(rec.system, true);
   else await loadSystem(rec.system);
   restyle(); showInfo(sib); markTree(); saveHash();
-  if (focus) focusRecs(sib);
+  if (focus) focusRecs(shown);
 }
 function selectMany(recs) {
   S.cur = null; S.sel = new Set(recs.map((r) => r.id));
@@ -310,9 +352,23 @@ function clearSel() {
   $('#info').replaceChildren(emptyInfo());
 }
 const emptyInfo = () => $('#info-empty').content.cloneNode(true);
+// Isolate = show only the selection and frame all of it (both sides, every part) as one whole.
+const selectionRecs = () => [...S.sel].map((id) => S.byId.get(id)).filter(Boolean);
+let hintTimer = 0;
+function notify(text) {
+  const h = $('#hint'); h.textContent = text; h.classList.remove('hide'); clearTimeout(hintTimer); hintTimer = setTimeout(() => h.classList.add('hide'), 2800);
+}
+function setIso(on) {
+  if (on && !S.sel.size) { notify('Select a structure first, then isolate it'); on = false; }
+  S.iso = on;
+  if (S.cur) S.sel = new Set((on ? wholeOf(S.cur) : siblingsOf(S.cur)).map((r) => r.id));
+  restyle(); markTree();
+  if (on) focusRecs(selectionRecs());
+}
+const toggleIso = () => setIso(!S.iso);
 $('#clearBtn').addEventListener('click', clearSel);
 $('#ghostBtn').addEventListener('click', () => { S.ghost = !S.ghost; restyle(); });
-$('#isoBtn').addEventListener('click', () => { S.iso = !S.iso; restyle(); });
+$('#isoBtn').addEventListener('click', () => toggleIso());
 
 // -------------------------------------------------------------- info panel --
 async function descFor(sys) {
@@ -337,6 +393,103 @@ function crumbs(rec) {
   const root = chain[0] && chain[0].name.toLowerCase().includes((SYS[rec.system]?.[0] || '').split(' ')[0].toLowerCase()) ? 1 : 0;
   return chain.slice(root);
 }
+// ------------------------------------------------------------ info tabs --
+// The info panel is a header (name, pills, actions) plus tabs. Built-in tabs are registered below; the motion module
+// adds "Motion" through atlas.registerTab. A tab is { id, label, order, applies(sib) -> bool, render(sib, host, ctx) }.
+const TABS = [];
+function registerTab(t) {
+  const i = TABS.findIndex((x) => x.id === t.id); if (i >= 0) TABS.splice(i, 1);
+  TABS.push(t); TABS.sort((a, b) => (a.order ?? 50) - (b.order ?? 50));
+  if (S.cur && S.M) showInfo(siblingsOf(S.cur));
+}
+const NOT_A_MUSCLE = /bursa|retinaculum|sheath|aponeurosis|tendon|fascia|septum|ligament|membrane|arch\b|tract|linea alba|trochlea|tarsus|pulley|ring/i;
+const isMuscle = (rec) => rec.system === 'muscular' && !NOT_A_MUSCLE.test(rec.name);
+
+// muscle facts: origin / insertion / action / innervation, kept short. Curated table first, then a best-effort extract of the article.
+let factsP = null, vocabP = null;
+const loadFacts = () => (factsP ||= fetch(`${CFG.dataBase}muscles.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({})));
+const loadVocab = () => (vocabP ||= fetch(`${CFG.dataBase}vocab.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({})));
+function resolveFacts(F, name) {
+  let f = F[name], hops = 0;
+  while (typeof f === 'string' && hops++ < 4) f = F[f];   // "Long head of biceps brachii": "Biceps brachii muscle"
+  return f && typeof f === 'object' ? f : null;
+}
+const clip = (t, n = 150) => { t = t.replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1).replace(/[\s,;:(]+\S*$/, '') + '…' : t; };
+function extractFacts(text) {
+  const sents = text.replace(/\n+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z])/).map((s) => s.trim()).filter((s) => s.length > 20 && s.length < 400);
+  const pick = (re) => { const s = sents.find((x) => re.test(x)); return s ? [clip(s)] : null; };
+  return { o: pick(/\b(originates?|arises?|takes (its )?origin|origin)\b/i), i: pick(/\b(inserts?|insertion|inserted|attaches|attached)\b/i),
+    a: pick(/\b(flexes|extends|abducts|adducts|rotates|elevates|depresses|function|action|moves|draws|pulls|tenses|acts)\b/i),
+    n: pick(/\b(innervated|innervation|nerve supply|supplied by|nerve)\b/i), auto: true };
+}
+const FACT_ROWS = [['o', 'O', 'Origin'], ['i', 'I', 'Insertion'], ['a', 'A', 'Action'], ['n', 'N', 'Nerve']];
+function renderFacts(sib, host, ctx) {
+  const rec = sib[0];
+  host.replaceChildren(el('p', { className: 'fine' }, 'Loading…'));
+  Promise.all([loadFacts(), loadVocab()]).then(async ([F, V]) => {
+    let f = resolveFacts(F, rec.name);
+    if (!f) f = extractFacts((await descFor(rec.system))[rec.name] || '');
+    if (!ctx.isCurrent()) return;
+    const card = el('dl', { className: 'facts' });
+    for (const [k, badge, label] of FACT_ROWS) {
+      const v = [].concat(f[k] || []);
+      card.append(el('div', { className: 'frow' }, el('dt', {}, el('b', {}, badge), label),
+        el('dd', {}, v.length ? v.map((x) => el('span', { className: 'fv' }, x)) : el('span', { className: 'none' }, 'Not listed'))));
+    }
+    host.replaceChildren(card);
+    const acts = f.acts || [];
+    if (acts.length) {
+      host.append(el('h3', {}, 'Moves the body at'));
+      host.append(el('div', { className: 'chips' }, acts.map(([j, m, role]) => {
+        const jl = V.joints?.[j]?.label?.replace(/ \(.*\)| joint$/g, '') || j, ml = V.movementLabels?.[m] || m;
+        return el('button', { className: 'chip' + (role === 'P' ? ' prime' : ''), type: 'button', title: `${role === 'P' ? 'Prime mover' : 'Assists'}: ${ml.toLowerCase()} at the ${jl.toLowerCase()}. Click to animate.`,
+          onclick: () => openMotion({ joint: j, movement: m, muscle: rec.name }) }, el('i', {}, '▶'), `${jl} · ${ml.toLowerCase()}`);
+      })));
+      host.append(el('p', { className: 'fine' }, 'Solid = prime mover, outline = assists. Click to see the movement in 3D.'));
+    }
+    const hasAtt = S.M.structures.some((r) => r.system === 'insertions' && r.name === rec.name);
+    host.append(el('div', { className: 'actions' },
+      hasAtt ? el('button', { className: 'btn', type: 'button', onclick: () => showAttachments(sib) }, 'Show attachments on skeleton') : null,
+      el('button', { className: 'btn', type: 'button', onclick: () => { S.tab = 'text'; showInfo(sib); } }, 'Read full text')));
+    if (f.auto) host.append(el('p', { className: 'fine' }, 'Auto-extracted from the article; no curated entry for this structure yet.'));
+    else host.append(el('p', { className: 'fine' }, 'Standard textbook values; variants exist.'));
+  });
+}
+function openMotion(req) {
+  atlas.pendingMotion = req;
+  const rec = S.cur;
+  if (rec && TABS.some((t) => t.id === 'motion' && t.applies(siblingsOf(rec)))) { S.tab = 'motion'; showInfo(siblingsOf(rec)); }
+  else if (atlas.motion?.open) atlas.motion.open(req);
+  else notify('Motion animations are still loading…');
+}
+async function showAttachments(sib) {
+  const ids = sib.map((r) => r.id);
+  for (const r of S.M.structures) if (r.system === 'insertions' && r.name === sib[0].name) ids.push(r.id);
+  S.sel = new Set(ids); S.ghost = true;
+  await Promise.all(['insertions', 'skeletal'].map((k) => (S.sys.get(k)?.visible ? loadSystem(k) : setSystemVisible(k, true))));
+  restyle(); markTree(); focusRecs(selectionRecs());
+}
+function renderText(sib, host, ctx) {
+  const rec = sib[0];
+  const ids = new Set(sib.map((r) => r.id));
+  const lms = S.M.landmarks.filter((l) => ids.has(l.target));
+  const seen = new Set(), uniq = lms.filter((l) => (seen.has(l.name + l.side) ? false : seen.add(l.name + l.side)));
+  if (uniq.length) {
+    host.append(el('h3', {}, `Landmarks (${uniq.length})`));
+    host.append(el('div', { className: 'lm-list' }, uniq.slice(0, 60).map((l) => el('button', { onclick: () => showLandmark(l) }, l.name))));
+  }
+  const holder = el('div', {}, el('h3', {}, 'Description'), el('p', { className: 'fine' }, 'Loading…'));
+  host.append(holder);
+  descFor(rec.system).then((d) => {
+    if (!ctx.isCurrent()) return;
+    const t = d[rec.name];
+    holder.replaceChildren(el('h3', {}, 'Description'), t ? fmtDesc(t, rec.name) : el('p', { className: 'fine' }, 'No description available for this structure.'),
+      t ? el('p', { className: 'fine' }, 'Text: Wikipedia, CC BY-SA.') : null);
+  });
+}
+registerTab({ id: 'facts', label: 'Facts', order: 10, applies: (sib) => isMuscle(sib[0]), render: renderFacts });
+registerTab({ id: 'text', label: 'Description', order: 90, applies: () => true, render: renderText });
+
 async function showInfo(sib) {
   const rec = sib[0], color = SYS[rec.system]?.[1] || '#888';
   const box = el('div', { style: `--dot:${color}` });
@@ -354,24 +507,22 @@ async function showInfo(sib) {
   box.append(pills);
   box.append(el('div', { className: 'actions' },
     el('button', { className: 'btn primary', onclick: () => focusRecs(sib) }, 'Focus'),
-    el('button', { className: 'btn', onclick: () => { S.iso = !S.iso; restyle(); } }, 'Isolate'),
+    el('button', { className: 'btn', title: 'Show only this (I)', onclick: () => toggleIso() }, wholeOf(rec).length > sib.length ? 'Isolate whole muscle' : 'Isolate'),
     el('button', { className: 'btn', onclick: () => { S.ghost = !S.ghost; restyle(); } }, 'Ghost others'),
     el('button', { className: 'btn', onclick: () => navigator.clipboard?.writeText(location.href) }, 'Copy link')));
-  const ids = new Set(sib.map((r) => r.id));
-  const lms = S.M.landmarks.filter((l) => ids.has(l.target));
-  const seen = new Set(), uniq = lms.filter((l) => (seen.has(l.name + l.side) ? false : seen.add(l.name + l.side)));
-  if (uniq.length) {
-    box.append(el('h3', {}, `Landmarks (${uniq.length})`));
-    box.append(el('div', { className: 'lm-list' }, uniq.slice(0, 60).map((l) => el('button', { onclick: () => showLandmark(l) }, l.name))));
+  const tabs = TABS.filter((t) => t.applies(sib));
+  const active = tabs.find((t) => t.id === S.tab) || tabs[0];
+  if (tabs.length > 1) {
+    box.append(el('div', { className: 'tabs', role: 'tablist' }, tabs.map((t) => el('button', {
+      className: 'tab' + (t === active ? ' on' : ''), type: 'button', role: 'tab', 'aria-selected': String(t === active),
+      onclick: () => { S.tab = t.id; showInfo(sib); },
+    }, t.id === 'text' && isMuscle(rec) ? 'Full text' : t.label))));
   }
-  const holder = el('div', {}, el('h3', {}, 'Description'), el('p', { className: 'fine' }, 'Loading…'));
-  box.append(holder);
-  $('#info').replaceChildren(box);
-  const d = await descFor(rec.system);
-  if (S.cur !== rec) return;
-  const t = d[rec.name];
-  holder.replaceChildren(el('h3', {}, 'Description'), t ? fmtDesc(t, rec.name) : el('p', { className: 'fine' }, 'No description available for this structure.'),
-    t ? el('p', { className: 'fine' }, 'Text: Wikipedia, CC BY-SA.') : null);
+  const host = el('div', { className: 'tabpanel', role: 'tabpanel' }); box.append(host);
+  const info = $('#info'), top = info.scrollTop, same = info.dataset.cur === rec.id;
+  info.replaceChildren(box); info.dataset.cur = rec.id; if (same) info.scrollTop = top;
+  active.render(sib, host, { rec, isCurrent: () => S.cur === rec && info.contains(host), el, nameOf });
+  window.dispatchEvent(new CustomEvent('atlas:select', { detail: { rec, sib, tab: active.id } }));
 }
 async function showLandmark(lm) {
   S.curLm = lm;
@@ -426,9 +577,9 @@ function groupStructures(sys, gid) {
 async function selectGroup(g, sys) {
   const recs = groupStructures(sys, g.id);
   if (!recs.length) return;
-  S.cur = null; S.curLm = null; S.sel = new Set(recs.slice(0, 800).map((r) => r.id));
+  S.cur = null; S.curLm = null; S.sel = new Set(recs.map((r) => r.id));
   if (!S.sys.get(sys)?.visible) await setSystemVisible(sys, true); else await loadSystem(sys);
-  restyle(); markTree();
+  restyle(); markTree(); if (S.iso) focusRecs(recs);
   const color = SYS[sys]?.[1] || '#888', chain = []; let p = S.groups.get(g.parent);
   while (p) { chain.unshift(p); p = S.groups.get(p.parent); }
   const gname = (x) => (S.lang === 'en' ? x.name : (S.i18n[x.name.toLowerCase()]?.[S.lang] || x.name));
@@ -437,7 +588,7 @@ async function selectGroup(g, sys) {
   box.append(el('div', { className: 'pills' }, el('span', { className: 'pill sys' }, SYS[sys]?.[0] || sys), el('span', { className: 'pill' }, `${recs.length} structures`)));
   box.append(el('div', { className: 'actions' },
     el('button', { className: 'btn primary', onclick: () => focusRecs(recs) }, 'Focus'),
-    el('button', { className: 'btn', onclick: () => { S.iso = !S.iso; restyle(); } }, 'Isolate'),
+    el('button', { className: 'btn', onclick: () => toggleIso() }, 'Isolate'),
     el('button', { className: 'btn', onclick: () => { S.ghost = !S.ghost; restyle(); } }, 'Ghost others'),
     el('button', { className: 'btn', onclick: clearSel }, 'Clear')));
   const holder = el('div', {}); box.append(holder);
@@ -573,7 +724,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '/') { e.preventDefault(); $('#q').focus(); }
   else if (e.key === 'Escape') clearSel();
   else if (e.key === 'g' || e.key === 'G') { S.ghost = !S.ghost; restyle(); }
-  else if (e.key === 'i' || e.key === 'I') { S.iso = !S.iso; restyle(); }
+  else if (e.key === 'i' || e.key === 'I') toggleIso();
   else if (e.key === 'f' || e.key === 'F') { S.sel.size ? focusRecs([...S.sel].map((id) => S.byId.get(id))) : fitVisible(); }
 });
 $('#menuBtn').addEventListener('click', () => { const o = document.body.classList.toggle('nav-open'); $('#menuBtn').setAttribute('aria-expanded', o); });
@@ -603,6 +754,8 @@ async function init() {
     const ik = `${r.system}|${S.groups.has(r.group) ? r.group : ''}`;
     if (!S.items.has(ik)) S.items.set(ik, new Map());
     const m = S.items.get(ik); if (!m.has(r.name)) m.set(r.name, []); m.get(r.name).push(r);
+    const pb = r.system === 'muscular' && partBase(r.name);
+    if (pb) { const wk = `${r.system}|${pb}`; if (!S.wholes.has(wk)) S.wholes.set(wk, []); S.wholes.get(wk).push(r); }
   }
   for (const l of S.M.landmarks) { S.lmById.set(l.id, l); if (!S.lmByTarget.has(l.target)) S.lmByTarget.set(l.target, []); S.lmByTarget.get(l.target).push(l); }
   const pathText = (r) => crumbs(r).map((g) => g.name).join(' ');
@@ -617,6 +770,30 @@ async function init() {
   for (const info of S.M.systems) sysState(info.key);
   buildSystems(); setLoading(null); $('#info').replaceChildren(emptyInfo());
   await restoreHash(); rebuildPins();
-  window.atlas = { S, focusRecs, selectRec, THREE, camera, controls, scene };   // handy for debugging in the console
+  window.dispatchEvent(new CustomEvent('atlas:ready'));
 }
-init();
+
+// ---------------------------------------------------------------- public API --
+// Everything the study (quiz) and motion modules may use. Those modules live in their own files (js/quiz.js, js/motion.js)
+// and must not edit this one: wait for `await atlas.ready`, then use only what is listed here.
+const atlas = window.atlas = {
+  S, THREE, scene, camera, controls, renderer, canvas, stage, world, CFG, SYS,
+  el, $, nameOf, latinOf, siblingsOf, notify, debounce,
+  render: () => { dirty = true; },                       // ask for a redraw (after you moved a mesh / changed a material)
+  onFrame: (fn) => { frameHooks.add(fn); return () => frameHooks.delete(fn); },       // fn(dt, nowMs) -> true if it changed the scene
+  onAfterRender: (fn) => { afterHooks.add(fn); return () => afterHooks.delete(fn); }, // fn(rendered) after the draw: position DOM labels here
+  project,                                               // project(THREE.Vector3, out?) -> { x, y, visible } in px relative to #stage
+  loadSystem, setSystemVisible,                          // system keys: skeletal, joints, insertions, muscular, ...
+  meshesOf: (id) => S.meshes.get(id) || [],              // meshes are only present once their system is loaded
+  recsByName: (system, name) => S.M.structures.filter((r) => r.system === system && r.name === name),   // all sides / duplicates of a named structure
+  selectRec, selectMany, clearSel, focusRecs, flyTo, restyle, setIso, toggleIso, selectionRecs, showInfo,
+  wholeOf,                                               // wholeOf(rec) -> every record of the anatomical unit (all heads/parts, both sides of a paired name)
+  groupStructures,                                       // groupStructures(system, groupId) -> records under that group, sub-groups included
+  registerTab, openMotion, isMuscle, loadFacts, loadVocab,
+  pickHandler: null,    // set fn(rec|null, landmark|null, pointerEvent) to receive canvas clicks instead of the normal selection; hover names are suppressed while set
+  pendingMotion: null,  // set by the muscle "Moves the body at" chips: { joint, movement, muscle }; the motion tab consumes it
+  motion: null,         // motion.js assigns { open(req), play(...), stop() }
+  quiz: null,           // quiz.js assigns its own API
+  ready: null,
+};
+atlas.ready = init();

@@ -7,6 +7,8 @@
 <meta name="description" content="Interactive 3D human anatomy atlas: navigate skeletal, muscular, cardiovascular, nervous, visceral and lymphoid systems, joints and body regions.">
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/quiz.css">
+<link rel="stylesheet" href="css/motion.css">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
@@ -29,6 +31,7 @@
       <button data-view="right">Right</button>
       <button data-view="fit">Fit</button>
     </div>
+    <button id="studyBtn" class="mode-btn" type="button" aria-pressed="false" title="Diagram quizzes for every section">Study</button>
     <label class="lang"><span class="sr">Language</span>
       <select id="lang" title="Structure names">
         <option value="en">English</option><option value="la">Latin</option><option value="fr">Français</option>
@@ -58,6 +61,7 @@
 
   <main id="stage">
     <canvas id="gl" tabindex="0" aria-label="3D anatomy viewer"></canvas>
+    <div id="overlay" aria-hidden="true"></div>
     <div id="tip" role="status" hidden></div>
     <div id="loading" hidden><div class="bar"><i></i></div><span></span></div>
     <div id="hint">Drag to rotate · scroll to zoom · right-drag to pan · click a structure</div>
@@ -70,6 +74,7 @@
   </main>
 
   <aside id="info" aria-live="polite"></aside>
+  <section id="study" aria-label="Study tools" hidden></section>
 </div>
 <template id="info-empty">
   <div class="empty">
@@ -80,5 +85,7 @@
 </template>
 <script src="config.js"></script>
 <script type="module" src="js/app.js"></script>
+<script type="module" src="js/quiz.js"></script>
+<script type="module" src="js/motion.js"></script>
 </body>
 </html>

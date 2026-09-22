@@ -1,0 +1,149 @@
+/* Study mode: diagram quizzes (panel #study + pins / tags drawn in #overlay). Colours come from the app tokens in app.css. */
+:root { --ok: #3ecf8e; --ok-ink: #04210f; --bad: #ff6b6b; --bad-ink: #2a0606; }   /* on :root: the pins live in #overlay, outside #study */
+:root[data-theme="light"] { --ok: #0f7a4d; --ok-ink: #ffffff; --bad: #c62828; --bad-ink: #ffffff; }
+
+body.study-open .toolbar { display: none; }               /* Ghost / Isolate / Landmarks / Clear would fight the quiz state */
+
+.qs { display: flex; flex-direction: column; min-height: 100%; }
+.qs-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.qs-titles { flex: 1; min-width: 0; }
+.qs-title { margin: 0; font-size: 16px; line-height: 1.25; outline: none; overflow-wrap: anywhere; }
+.qs-sub { color: var(--muted); font-size: 12px; }
+.qs-back { width: 32px; height: 32px; flex: none; border-radius: 50%; border: 1px solid var(--line); background: var(--panel2); font-size: 20px; line-height: 1; }
+.qs-back:hover { border-color: var(--accent); }
+.qs-exit { flex: none; background: none; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; color: var(--muted); font-size: 12px; }
+.qs-exit:hover { color: var(--text); border-color: var(--accent); }
+.qs-body { padding: 12px 14px 22px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.qs-lead { margin: 0; color: var(--muted); }
+.qs-fine { margin: 0; color: var(--muted); font-size: 12px; }
+.qs-load { color: var(--muted); padding: 24px 0; text-align: center; }
+.qs-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.qs-actions.foot { margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--line); }
+.btn.ghost { background: none; color: var(--muted); }
+.qgo { padding: 8px 18px; }
+.qs button:disabled { cursor: default; }
+
+.qbar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.qbar i { display: block; height: 100%; background: var(--dot, var(--accent)); transition: width .25s; }
+
+/* section picker */
+.qcards { display: grid; gap: 8px; }
+.qcard { display: grid; grid-template-columns: 6px 1fr; gap: 12px; text-align: left; padding: 10px 12px 10px 0; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.qcard:hover { border-color: var(--dot); }
+.qcard-dot { background: var(--dot); border-radius: 0 3px 3px 0; }
+.qcard-main { display: grid; gap: 4px; min-width: 0; }
+.qcard-main small { color: var(--muted); }
+.qcard-stat { font-size: 11px; }
+
+/* setup */
+.qmodes { display: grid; gap: 6px; }
+.qmode { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; text-align: left; padding: 8px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); }
+.qmode span:last-child { display: grid; }
+.qmode small { color: var(--muted); }
+.qmode-icon { display: grid; place-items: center; height: 34px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); font-weight: 700; font-size: 12px; color: var(--dot); }
+.qmode[aria-checked="true"] { border-color: var(--dot); background: color-mix(in srgb, var(--dot) 14%, var(--panel2)); }
+.qmode[aria-checked="true"] .qmode-icon { background: var(--dot); color: #0b0f14; border-color: var(--dot); }
+.qfield { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+.qfield select { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; color: var(--text); font-size: 14px; }
+.qcheck { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--text); }
+.qcheck input { margin-top: 3px; }
+
+/* progress line */
+.qprog { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+
+/* question */
+.qstem { margin: 4px 0 2px; font-size: 16px; line-height: 1.35; }
+.qname { color: var(--dot, var(--accent)); }
+.qopts { display: grid; gap: 7px; }
+.qopt { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; text-align: left; padding: 9px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); line-height: 1.35; }
+.qopt kbd { font: 600 11px/18px system-ui; text-align: center; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); background: var(--panel); }
+.qopt:not(:disabled):hover { border-color: var(--accent); }
+.qopt.ok { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 20%, var(--panel2)); }
+.qopt.bad { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 20%, var(--panel2)); }
+.qopt.dim { opacity: .55; }
+.qfeed { border-radius: var(--radius); padding: 10px 12px; border: 1px solid var(--line); display: grid; gap: 4px; }
+.qfeed.ok { border-color: var(--ok); }
+.qfeed.bad { border-color: var(--bad); }
+.qfeed p { margin: 0; }
+.qfeed-head { font-weight: 700; }
+.qfeed.ok .qfeed-head { color: var(--ok); }
+.qfeed.bad .qfeed-head { color: var(--bad); }
+.latin { font-style: italic; }
+.qfacts { display: grid; gap: 2px; font-size: 13px; }
+.qf b { display: inline-block; min-width: 68px; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+
+/* label the diagram */
+.qslots { display: grid; gap: 5px; }
+.qslot { display: flex; align-items: stretch; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.qslot-main { flex: 1; display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center; text-align: left; padding: 6px 8px; background: none; border: 0; min-width: 0; }
+.qslot-x { width: 30px; border: 0; background: none; color: var(--muted); font-size: 18px; }
+.qslot-x:hover { color: var(--bad); }
+.qslot.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.qnum { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 12px; }
+.qans em { color: var(--muted); font-style: normal; }
+.qslot.ok { border-color: var(--ok); }
+.qslot.ok .qnum, .qslot.ok .qmark { background: var(--ok); color: var(--ok-ink); }
+.qslot.bad { border-color: var(--bad); }
+.qslot.bad .qnum { background: var(--bad); color: var(--bad-ink); }
+.qmark { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700; }
+.qslot.bad .qmark { background: var(--bad); color: var(--bad-ink); }
+.qfilter { width: 100%; padding: 8px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); }
+.qbank { display: flex; flex-wrap: wrap; gap: 6px; }
+.qchip { background: var(--panel2); border: 1px solid var(--line); border-radius: 99px; padding: 4px 11px; font-size: 13px; }
+.qchip:not(:disabled):hover { border-color: var(--accent); }
+.qchip i { font-style: normal; display: inline-grid; place-items: center; width: 16px; height: 16px; margin-right: 6px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 10px; font-weight: 700; }
+.qchip.used { opacity: .6; }
+.qchip.tried { text-decoration: line-through; opacity: .4; }
+.qchip:disabled { opacity: .45; }
+
+/* results */
+.qscore { display: flex; align-items: baseline; justify-content: space-between; }
+.qscore b { font-size: 28px; }
+.qscore span { color: var(--muted); font-size: 18px; }
+.qres { display: grid; gap: 4px; }
+.qres-row { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: center; width: 100%; text-align: left; padding: 7px 9px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; }
+.qres-row:hover { border-color: var(--accent); }
+.qres-row small { grid-column: 2; color: var(--muted); }
+.qres-row .qmark { background: var(--ok); color: var(--ok-ink); }
+.qres-row.bad .qmark { background: var(--bad); color: var(--bad-ink); }
+
+/* overlay: numbered pins with a leader line to the surface point, and name tags */
+.qpin, .qtag { position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform; }
+.qdot { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.65); }
+.qlead { position: absolute; left: 0; top: -1px; width: 30px; height: 2px; transform-origin: 0 50%; transform: rotate(var(--ang, 0rad)); background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.45); }
+.qbadge { position: absolute; left: calc(var(--dx) - 13px); top: calc(var(--dy) - 13px); width: 26px; height: 26px; padding: 0; border-radius: 50%; pointer-events: auto;
+  display: grid; place-items: center; border: 2px solid #fff; background: var(--accent); color: var(--accent-ink); font: 700 13px/1 system-ui, sans-serif; box-shadow: 0 2px 8px rgba(0,0,0,.55); cursor: pointer; transition: transform .12s; }
+.qpin[data-state="filled"] .qbadge { background: #fff; color: #0b0f14; }
+.qpin[data-state="ok"] .qbadge { background: var(--ok); color: var(--ok-ink); }
+.qpin[data-state="bad"] .qbadge { background: var(--bad); color: var(--bad-ink); animation: qshake .35s; }
+.qpin.active .qbadge { transform: scale(1.22); box-shadow: 0 0 0 3px var(--accent), 0 2px 10px rgba(0,0,0,.6); }
+.qpin.behind { opacity: .4; }
+.qpin.behind .qbadge { border-style: dashed; }
+.qtag-dot { position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 0 0 3px rgba(0,0,0,.4); }
+.qtag-text { position: absolute; left: 10px; top: -34px; padding: 3px 10px; border-radius: 6px; background: rgba(10,14,20,.95); color: #fff; border: 1px solid var(--accent); font: 600 13px/1.3 system-ui, sans-serif; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.5); }
+.qtag.flip .qtag-text { left: auto; right: 10px; }
+.qtag.below .qtag-text { top: 12px; }
+@keyframes qshake { 25% { translate: -3px 0; } 75% { translate: 3px 0; } }
+@media (prefers-reduced-motion: reduce) { .qpin .qbadge, .qbar i { transition: none; } .qpin[data-state="bad"] .qbadge { animation: none; } }
+
+@media (max-width: 860px) {
+  .qs-head { padding: 8px 10px; }
+  .qs-body { padding: 10px 12px 18px; gap: 8px; }
+  .qstem { font-size: 15px; }
+  .qmodes { grid-template-columns: 1fr 1fr; }
+  .qmode { grid-template-columns: 1fr; }
+  .qmode-icon { height: 26px; }
+  .qmode small { display: none; }
+  .qopt { padding: 8px; }
+}
+
+/* phone width: the top bar (title, views, Study, language) needs ~500px and widened the whole grid, pushing the stage off-screen.
+   Tighten it and keep grid items from growing past the viewport. */
+@media (max-width: 860px) { #topbar, #stage, #info, #study { min-width: 0; } }
+@media (max-width: 520px) {
+  #topbar { gap: 6px; padding: 0 8px; overflow: hidden; }
+  #topbar h1 { display: none; }
+  .views button { padding: 5px 7px; }
+  .mode-btn { padding: 5px 10px; }
+  .lang select { padding: 5px 4px; max-width: 96px; }
+}

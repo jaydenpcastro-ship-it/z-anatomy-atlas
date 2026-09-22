@@ -45,6 +45,20 @@ const nice = (s) => NICE[s] || s.charAt(0) + s.slice(1).toLowerCase();
 const HIDE_TAGS = new Set(['SKELETAL', 'JOINTS', 'MUSCULAR', 'FASCIA', 'CARDIOVASCULAR', 'LYMPHOID', 'NERVOUS', 'VISCERAL', 'REGIONS', 'REFERENCE']);
 const TAG_NAME = { CNS: 'Central nervous system', PNS: 'Peripheral nervous system', SENSE: 'Sense organ', RESPIRATORY: 'Respiratory',
   DIGESTIVE: 'Digestive', URINARY: 'Urinary', REPRODUCTIVE: 'Reproductive', ENDOCRINE: 'Endocrine', INTEGUMENTARY: 'Integumentary' };
+// Short, spoken-friendly explanation of each category, for the audio "Listen" buttons (accessibility / hands-free study).
+const SYS_BLURB = {
+  skeletal: 'The skeletal system is the framework of bones and cartilage that supports the body, protects internal organs, and works with muscles to produce movement. It also stores minerals such as calcium and, within certain bones, produces blood cells in the bone marrow. This category includes the skull, spine, ribs, and the bones of the limbs and girdles.',
+  joints: "Joints are the connections between bones, held together by ligaments and, in synovial joints, a fluid-filled capsule that allows smooth movement. This category groups the body's joints by type — fibrous, cartilaginous, and synovial — along with the ligaments that stabilize them.",
+  insertions: "Muscular insertions show where each muscle attaches onto the skeleton, marking its origin and insertion points. Viewing them alongside the bones helps you understand how a muscle's pull translates into movement at a joint.",
+  muscular: 'The muscular system is made up of skeletal muscles that contract to move the bones, stabilize joints, and maintain posture. Each muscle here has an origin, an insertion, and one or more actions it produces at a joint.',
+  fascia: 'Fascia is the connective tissue envelope that wraps and separates muscles, organs, and other structures, giving the body its internal shape and letting tissues slide against one another. This category covers the major fascial layers and septa of the body.',
+  cardiovascular: "The cardiovascular system is the network of the heart, arteries, veins, and capillaries that circulates blood, delivering oxygen and nutrients to tissues and carrying away waste. Explore the heart's chambers and the major vessels of systemic and pulmonary circulation.",
+  lymphoid: "The lymphoid system includes the lymph nodes, spleen, thymus, and lymphatic vessels that drain excess fluid from tissues and support the body's immune defenses.",
+  nervous: 'The nervous system includes the brain and spinal cord, known as the central nervous system, as well as the peripheral nerves and sense organs that connect the body to the outside world.',
+  visceral: 'Visceral systems cover the internal organs of the digestive, respiratory, urinary, reproductive, and endocrine systems, such as the lungs, stomach, kidneys, and hormone-producing glands.',
+  regions: 'Body regions divide the body into named surface areas, such as the head, neck, thorax, abdomen, and limbs, that are used to describe location. This category is a map of anatomical regions rather than individual structures.',
+  reference: 'Reference lines and movements are the anatomical planes, directional terms, and joint movements — like flexion, extension, and rotation — used to describe position and motion throughout this atlas.',
+};
 
 // ------------------------------------------------------------------- state --
 const S = {
@@ -275,7 +289,7 @@ $('#pinsBtn').addEventListener('click', () => {
 const ray = new THREE.Raycaster(); ray.params.Points.threshold = 0.012;
 const ndc = new THREE.Vector2();
 let hoverOk = true, lastHover = 0;
-function pickAt(e, forHover) {
+function pickAt(e, forHover, { additive = false } = {}) {
   const r = canvas.getBoundingClientRect();
   ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
@@ -286,8 +300,10 @@ function pickAt(e, forHover) {
     if (ph) lm = S.lmById.get(pinIds[ph.index]);
   }
   const roots = [...S.sys.values()].filter((s) => s.visible && s.loaded).map((s) => s.group);
+  // Ghost mode normally excludes faded structures from picking so a mis-click can't grab the background; an
+  // additive (ctrl/shift) click means the user wants exactly one of those faded structures, so it stays pickable.
   const hits = ray.intersectObjects(roots, true).filter((h) => h.object.isMesh && h.object.visible &&
-    !(S.sel.size && S.ghost && !S.sel.has(h.object.userData.zid)));
+    (additive || !(S.sel.size && S.ghost && !S.sel.has(h.object.userData.zid))));
   if (forHover && performance.now() - t0 > 70) hoverOk = false; // raycast too slow on this machine: hover off, click still works
   const rec = hits.length ? S.byId.get(hits[0].object.userData.zid) : null;
   return { rec, lm };
@@ -307,12 +323,61 @@ let down = null;
 canvas.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; $('#hint').classList.add('hide'); });
 canvas.addEventListener('pointerup', (e) => {
   if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return;
-  const { rec, lm } = pickAt(e, false);
+  const additive = e.ctrlKey || e.metaKey || e.shiftKey;
+  const { rec, lm } = pickAt(e, false, { additive });
   if (atlas.pickHandler) { atlas.pickHandler(rec, lm, e); return; }   // study mode takes over clicks (no info panel, no selection)
-  if (lm) { const t = S.byId.get(lm.target); if (t) { selectRec(t, { focus: false }); showLandmark(lm); } }
-  else if (rec) selectRec(rec, { focus: false });
-  else clearSel();
+  if (lm) {
+    const t = S.byId.get(lm.target);
+    if (t) { if (additive) toggleInSelection(t); else { selectRec(t, { focus: false }); showLandmark(lm); } }
+  } else if (rec) { additive ? toggleInSelection(rec) : selectRec(rec, { focus: false }); }
+  else if (!additive) clearSel();
 });
+
+// ----------------------------------------------------------- text-to-speech --
+// Reads category, group and structure explanations aloud so the atlas can be studied hands-free. One utterance
+// plays at a time; the button that started it doubles as its stop control (aria-pressed + a "speaking" style).
+const SPEECH_LANG = { en: 'en-US', la: 'la', fr: 'fr-FR', es: 'es-ES', pt: 'pt-PT' };
+const speechOk = () => 'speechSynthesis' in window;
+let speakBtn = null;
+function stopSpeech() {
+  if (speechOk()) speechSynthesis.cancel();
+  if (speakBtn) { speakBtn.classList.remove('speaking'); speakBtn.setAttribute('aria-pressed', 'false'); const lbl = $('.lbl', speakBtn); if (lbl) lbl.textContent = speakBtn.dataset.idleLabel || 'Listen'; }
+  speakBtn = null;
+}
+function speak(text, btn) {
+  if (!speechOk()) { notify('Text-to-speech is not supported in this browser'); return; }
+  const wasThis = btn && speakBtn === btn;
+  stopSpeech();
+  if (wasThis) return; // clicking the button that is already speaking just stops it
+  if (!text) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = SPEECH_LANG[S.lang] || 'en-US'; u.rate = 0.95;
+  u.onend = stopSpeech; u.onerror = stopSpeech;
+  speakBtn = btn || null;
+  if (btn) { btn.classList.add('speaking'); btn.setAttribute('aria-pressed', 'true'); const lbl = $('.lbl', btn); if (lbl) lbl.textContent = 'Stop'; }
+  speechSynthesis.speak(u);
+}
+const speakerIcon = () => el('span', { className: 'ico', 'aria-hidden': 'true', innerHTML:
+  '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M19 6a9 9 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" opacity=".6"/></svg>' });
+// A "Listen" button; getText() may return a string or a Promise<string> (fetched lazily on click).
+function listenBtn(getText, label) {
+  const b = el('button', { className: 'btn listen', type: 'button', 'aria-pressed': 'false', title: label || 'Listen to this explanation' },
+    speakerIcon(), el('span', { className: 'lbl' }, 'Listen'));
+  b.dataset.idleLabel = 'Listen';
+  b.addEventListener('click', async () => {
+    if (b.classList.contains('speaking')) { stopSpeech(); return; }
+    b.disabled = true;
+    const text = await getText();
+    b.disabled = false;
+    if (!text) { notify('Nothing to read aloud yet'); return; }
+    speak(text, b);
+  });
+  return b;
+}
+function triggerListen() {
+  const b = $('#info .btn.listen');
+  if (b) b.click(); else notify('Select a structure or category first, then press L to hear it');
+}
 
 // -------------------------------------------------------------- selection ---
 function siblingsOf(rec) { return S.siblings.get(`${rec.system}|${rec.group}|${rec.name}`) || [rec]; }
@@ -329,6 +394,7 @@ function wholeOf(rec) {
   return parts && parts.length > sib.length ? parts : sib;
 }
 async function selectRec(rec, { focus = true } = {}) {
+  stopSpeech();
   const sib = siblingsOf(rec);
   const shown = S.iso ? wholeOf(rec) : sib;   // while isolating, a click isolates the whole muscle
   S.cur = rec; S.curLm = null; S.sel = new Set(shown.map((r) => r.id));
@@ -337,17 +403,57 @@ async function selectRec(rec, { focus = true } = {}) {
   restyle(); showInfo(sib); markTree(); saveHash();
   if (focus) focusRecs(shown);
 }
-function selectMany(recs) {
-  S.cur = null; S.sel = new Set(recs.map((r) => r.id));
+function ensureVisible(recs) {
   const need = new Set(recs.map((r) => r.system));
-  Promise.all([...need].map((k) => (S.sys.get(k)?.visible ? loadSystem(k) : setSystemVisible(k, true)))).then(restyle);
-  restyle(); markTree();
-  $('#info').replaceChildren(el('div', { className: 'empty' }, el('h2', {}, `${recs.length} structures highlighted`),
-    el('p', {}, 'They are highlighted in the 3D view. Enable “Ghost others” to fade the rest.'),
-    el('div', { className: 'actions' }, el('button', { className: 'btn primary', onclick: () => focusRecs(recs) }, 'Focus'), el('button', { className: 'btn', onclick: clearSel }, 'Clear'))));
+  return Promise.all([...need].map((k) => (S.sys.get(k)?.visible ? loadSystem(k) : setSystemVisible(k, true)))).then(restyle);
+}
+// Add or remove a whole batch of structures from the current selection together (e.g. every ligament in a group),
+// so unrelated tissue types picked one after another stay highlighted and can be isolated as one set.
+function toggleManyInSelection(recs) {
+  if (!recs.length) return;
+  stopSpeech();
+  const already = recs.every((r) => S.sel.has(r.id));
+  const sel = new Set(S.sel);
+  for (const r of recs) { if (already) sel.delete(r.id); else sel.add(r.id); }
+  S.cur = null; S.curLm = null; S.sel = sel;
+  if (!sel.size) { restyle(); markTree(); saveHash(); $('#info').replaceChildren(emptyInfo()); return; }
+  ensureVisible(recs); restyle(); markTree(); saveHash(); multiInfo();
+}
+const toggleInSelection = (rec) => toggleManyInSelection(siblingsOf(rec));
+function selectMany(recs) {
+  stopSpeech();
+  S.cur = null; S.curLm = null; S.sel = new Set(recs.map((r) => r.id));
+  ensureVisible(recs); restyle(); markTree(); saveHash();
+  multiInfo();
   focusRecs(recs);
 }
+// Info panel for a multi-structure selection: one row per structure (sides merged), each removable, plus the
+// usual Focus / Isolate / Ghost actions and a Listen button that reads the whole list aloud.
+function multiInfo() {
+  const recs = selectionRecs();
+  const groups = new Map();
+  for (const r of recs) { const k = `${r.system}|${r.name}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
+  const rows = [...groups.values()].sort((a, b) => nameOf(a[0]).localeCompare(nameOf(b[0])));
+  const box = el('div', { className: 'empty' },
+    el('h2', {}, `${rows.length} structure${rows.length === 1 ? '' : 's'} selected`),
+    el('p', {}, 'Ctrl/⌘-click (or Shift-click) a structure in the 3D view, tree or search results to add or remove it here.'));
+  box.append(listenBtn(() => `Currently selected: ${rows.map((g) => nameOf(g[0])).join(', ')}.`, 'Listen to the list of selected structures'));
+  box.append(el('div', { className: 'multi-list' }, rows.map((g) => {
+    const r = g[0], color = SYS[r.system]?.[1] || '#888';
+    return el('div', { className: 'multi-item', style: `--dot:${color}` },
+      el('span', { className: 'dot' }), el('span', { className: 'nm' }, nameOf(r)),
+      el('span', { className: 'sysname' }, SYS[r.system]?.[0] || r.system),
+      el('button', { className: 'x', type: 'button', title: `Remove ${nameOf(r)}`, 'aria-label': `Remove ${nameOf(r)} from selection`, onclick: () => toggleManyInSelection(g) }, '×'));
+  })));
+  box.append(el('div', { className: 'actions' },
+    el('button', { className: 'btn primary', onclick: () => focusRecs(recs) }, 'Focus'),
+    el('button', { className: 'btn', title: 'Show only the selected structures (I)', onclick: () => toggleIso() }, S.iso ? 'Show all' : 'Isolate selection'),
+    el('button', { className: 'btn', onclick: () => { S.ghost = !S.ghost; restyle(); } }, 'Ghost others'),
+    el('button', { className: 'btn', onclick: clearSel }, 'Clear all')));
+  $('#info').replaceChildren(box);
+}
 function clearSel() {
+  stopSpeech();
   S.sel = new Set(); S.cur = null; S.curLm = null; flash.visible = false; restyle(); markTree(); saveHash();
   $('#info').replaceChildren(emptyInfo());
 }
@@ -375,18 +481,26 @@ async function descFor(sys) {
   if (!S.desc.has(sys)) S.desc.set(sys, fetch(`${CFG.dataBase}desc/${sys}.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({})));
   return S.desc.get(sys);
 }
-function fmtDesc(text, title) {
-  const box = el('div', { className: 'desc' });
+// Splits a raw wiki-style article into typed blocks (heading levels + paragraphs), skipping bare all-caps
+// title repeats. Shared by fmtDesc (renders it) and plainDesc (joins it into one string for text-to-speech).
+function descBlocks(text, title) {
   const blocks = text.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+  const out = [];
   for (const b of blocks) {
     let m;
-    if ((m = b.match(/^===\s*(.+?)\s*===$/))) box.append(el('h5', {}, m[1]));
-    else if ((m = b.match(/^==\s*(.+?)\s*==$/))) box.append(el('h4', {}, m[1]));
+    if ((m = b.match(/^===\s*(.+?)\s*===$/))) out.push({ t: 'h5', text: m[1] });
+    else if ((m = b.match(/^==\s*(.+?)\s*==$/))) out.push({ t: 'h4', text: m[1] });
     else if (b.toLowerCase() === (title || '').toLowerCase() || /^[A-Z0-9 ,()'’\-/&]+(\s\((MUSCLE|BONE)\))?$/.test(b) && b.length < 70) continue;
-    else box.append(el('p', {}, b));
+    else out.push({ t: 'p', text: b });
   }
+  return out;
+}
+function fmtDesc(text, title) {
+  const box = el('div', { className: 'desc' });
+  for (const b of descBlocks(text, title)) box.append(el(b.t, {}, b.text));
   return box;
 }
+const plainDesc = (text, title) => descBlocks(text, title).map((b) => (b.t === 'p' ? b.text : `${b.text}.`)).join(' ');
 function crumbs(rec) {
   const chain = []; let g = S.groups.get(rec.group);
   while (g) { chain.unshift(g); g = S.groups.get(g.parent); }
@@ -491,6 +605,7 @@ registerTab({ id: 'facts', label: 'Facts', order: 10, applies: (sib) => isMuscle
 registerTab({ id: 'text', label: 'Description', order: 90, applies: () => true, render: renderText });
 
 async function showInfo(sib) {
+  stopSpeech();
   const rec = sib[0], color = SYS[rec.system]?.[1] || '#888';
   const box = el('div', { style: `--dot:${color}` });
   box.append(el('h2', {}, nameOf(rec)));
@@ -508,8 +623,11 @@ async function showInfo(sib) {
   box.append(el('div', { className: 'actions' },
     el('button', { className: 'btn primary', onclick: () => focusRecs(sib) }, 'Focus'),
     el('button', { className: 'btn', title: 'Show only this (I)', onclick: () => toggleIso() }, wholeOf(rec).length > sib.length ? 'Isolate whole muscle' : 'Isolate'),
+    el('button', { className: 'btn', title: S.sel.size > sib.length ? 'Remove from the current multi-selection' : 'Add to a multi-selection to isolate several structures together', onclick: () => toggleInSelection(rec) }, S.sel.size > sib.length ? 'Remove from selection' : 'Add to selection'),
     el('button', { className: 'btn', onclick: () => { S.ghost = !S.ghost; restyle(); } }, 'Ghost others'),
-    el('button', { className: 'btn', onclick: () => navigator.clipboard?.writeText(location.href) }, 'Copy link')));
+    el('button', { className: 'btn', onclick: () => navigator.clipboard?.writeText(location.href) }, 'Copy link'),
+    listenBtn(async () => `${nameOf(rec)}. ${plainDesc((await descFor(rec.system))[rec.name] || '', rec.name) || 'No written description is available for this structure yet.'}`,
+      `Listen to the description of ${nameOf(rec)}`)));
   const tabs = TABS.filter((t) => t.applies(sib));
   const active = tabs.find((t) => t.id === S.tab) || tabs[0];
   if (tabs.length > 1) {
@@ -552,7 +670,7 @@ function itemRow(name, recs) {
   b.dataset.ids = recs.map((r) => r.id).join('|');
   const sides = [...new Set(recs.map((r) => r.side).filter(Boolean))];
   if (sides.length) b.append(el('span', { className: 'side-tag' }, sides.map((s) => s.toUpperCase()).join('·')));
-  b.addEventListener('click', () => selectRec(rec));
+  b.addEventListener('click', (e) => { (e.ctrlKey || e.metaKey || e.shiftKey) ? toggleInSelection(rec) : selectRec(rec); });
   return b;
 }
 function groupNode(g, sys) {
@@ -565,7 +683,12 @@ function groupNode(g, sys) {
     if (want && !built) { fillLevel(ul, g.id, sys); built = true; }
     ul.hidden = !want; row.classList.toggle('open', want);
   };
-  openers.set(`${sys}|${g.id}`, open); row.addEventListener('click', () => { open(); selectGroup(g, sys); });
+  openers.set(`${sys}|${g.id}`, open);
+  row.addEventListener('click', (e) => {
+    open();
+    if (e.ctrlKey || e.metaKey || e.shiftKey) toggleManyInSelection(groupStructures(sys, g.id));
+    else selectGroup(g, sys);
+  });
   li.append(row, ul); return li;
 }
 function groupStructures(sys, gid) {
@@ -575,6 +698,7 @@ function groupStructures(sys, gid) {
   return out;
 }
 async function selectGroup(g, sys) {
+  stopSpeech();
   const recs = groupStructures(sys, g.id);
   if (!recs.length) return;
   S.cur = null; S.curLm = null; S.sel = new Set(recs.map((r) => r.id));
@@ -589,12 +713,16 @@ async function selectGroup(g, sys) {
   box.append(el('div', { className: 'actions' },
     el('button', { className: 'btn primary', onclick: () => focusRecs(recs) }, 'Focus'),
     el('button', { className: 'btn', onclick: () => toggleIso() }, 'Isolate'),
+    el('button', { className: 'btn', title: 'Add every structure in this group to a multi-selection', onclick: () => toggleManyInSelection(recs) }, 'Add group to selection'),
     el('button', { className: 'btn', onclick: () => { S.ghost = !S.ghost; restyle(); } }, 'Ghost others'),
     el('button', { className: 'btn', onclick: clearSel }, 'Clear')));
   const holder = el('div', {}); box.append(holder);
   $('#info').replaceChildren(box);
   const t = (await descFor(g.system))[g.name];
-  if (t) holder.append(el('h3', {}, 'Description'), fmtDesc(t, g.name), el('p', { className: 'fine' }, 'Text: Wikipedia, CC BY-SA.'));
+  if (t) {
+    holder.append(el('h3', {}, 'Description'), fmtDesc(t, g.name), el('p', { className: 'fine' }, 'Text: Wikipedia, CC BY-SA.'),
+      listenBtn(() => `${gname(g)}. ${plainDesc(t, g.name)}`, `Listen to the description of ${gname(g)}`));
+  }
 }
 function appendItems(ul, sys, gid) {
   const m = itemsOf(sys, gid);
@@ -611,6 +739,16 @@ function fillTop(ul, sys) {
   else for (const g of roots) ul.append(groupNode(g, sys));
   appendItems(ul, sys, ''); // structures that sit outside any group
 }
+// Shows a short spoken-friendly explanation of a whole category (body system) in the info panel; paired with
+// the speaker button in the sidebar so a category can be introduced by ear before diving into its structures.
+function showCategoryInfo(k) {
+  stopSpeech();
+  const [label, color] = SYS[k] || [k, '#888'];
+  const box = el('div', { className: 'empty', style: `--dot:${color}` }, el('h2', {}, label));
+  box.append(listenBtn(() => SYS_BLURB[k] || label, `Listen to an explanation of ${label}`));
+  box.append(el('p', {}, SYS_BLURB[k] || 'No explanation is available yet for this category.'));
+  $('#info').replaceChildren(box);
+}
 function buildSystems() {
   const ul = $('#systems'); ul.replaceChildren(); openers.clear();
   for (const info of S.M.systems) {
@@ -621,7 +759,13 @@ function buildSystems() {
     const name = el('button', { className: 'sys-name', type: 'button', 'aria-expanded': 'false' }, el('b', {}, label), el('small', {}, `${info.structures} structures · ${(info.bytes / 1e6).toFixed(1)} MB`));
     const eye = el('button', { className: 'eye', type: 'button', title: 'Show / hide in 3D view', 'aria-pressed': String(!!S.sys.get(k)?.visible) },
       el('span', { innerHTML: '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>' }));
-    head.append(th, name, eye);
+    const listen = el('button', { className: 'listen-ico', type: 'button', 'aria-pressed': 'false',
+      title: `Listen to an explanation of ${label}`, 'aria-label': `Listen to an explanation of ${label}` }, speakerIcon());
+    listen.addEventListener('click', () => {
+      if (listen.classList.contains('speaking')) { stopSpeech(); return; }
+      showCategoryInfo(k); speak(SYS_BLURB[k] || label, listen);
+    });
+    head.append(th, name, el('div', { className: 'sys-controls' }, eye, listen));
     const prog = el('div', { className: 'sys-prog' });
     const tree = el('div', { className: 'tree' }); tree.hidden = true; const root = el('ul'); tree.append(root);
     let built = false;
@@ -639,8 +783,9 @@ function setProg(k, f) { const p = document.querySelector(`.sys[data-key="${k}"]
 function markTree() {
   document.querySelectorAll('.row.sel').forEach((n) => n.classList.remove('sel'));
   if (!S.sel.size) return;
-  const first = [...S.sel][0];
-  document.querySelectorAll('.row.leaf').forEach((n) => { if (n.dataset.ids && n.dataset.ids.split('|').includes(first)) n.classList.add('sel'); });
+  document.querySelectorAll('.row.leaf').forEach((n) => {
+    if (n.dataset.ids && n.dataset.ids.split('|').some((id) => S.sel.has(id))) n.classList.add('sel');
+  });
 }
 function revealInTree(rec) {
   const li = document.querySelector(`.sys[data-key="${rec.system}"]`); if (!li || !li._ensureTree) return;
@@ -687,8 +832,9 @@ function renderResults(list, limit = 80) {
     const b = el('button', { className: 'res', type: 'button', style: `--dot:${color}` },
       el('div', { className: 't' }, el('span', { className: 'dot' }), nameOf(r), side ? el('span', { className: 'side-tag' }, side) : null, it.kind === 'landmark' ? el('span', { className: 'pin' }, '📍 landmark') : null),
       el('div', { className: 'p' }, [SYS[r.system]?.[0], path].filter(Boolean).join(' › ')));
-    b.addEventListener('click', async () => {
+    b.addEventListener('click', async (e) => {
       const target = it.kind === 'landmark' ? S.byId.get(it.lm.target) : r;
+      if (e.ctrlKey || e.metaKey || e.shiftKey) { if (target) toggleInSelection(target); return; }
       await selectRec(target, { focus: it.kind !== 'landmark' }); revealInTreeSoon(target);
       if (it.lm) showLandmark(it.lm);
     });
@@ -706,7 +852,7 @@ function fillSelect(sel, opts) { sel.replaceChildren(...opts.map(([v, l]) => el(
 // ------------------------------------------------------------- url state ----
 function saveHash() {
   const vis = [...S.sys].filter(([, s]) => s.visible).map(([k]) => k).join(',');
-  const p = new URLSearchParams(); if (vis) p.set('s', vis); if (S.cur) p.set('sel', S.cur.id); if (S.lang !== 'en') p.set('lang', S.lang);
+  const p = new URLSearchParams(); if (vis) p.set('s', vis); if (S.sel.size) p.set('sel', [...S.sel].join(',')); if (S.lang !== 'en') p.set('lang', S.lang);
   history.replaceState(null, '', p.toString() ? `#${p}` : location.pathname + location.search);
 }
 async function restoreHash() {
@@ -714,8 +860,10 @@ async function restoreHash() {
   if (p.get('lang')) { S.lang = p.get('lang'); $('#lang').value = S.lang; }
   const list = (p.get('s') || 'skeletal').split(',').filter((k) => S.M.systems.some((s) => s.key === k));
   await Promise.all(list.map((k) => setSystemVisible(k, true)));
-  const sel = p.get('sel') && S.byId.get(p.get('sel'));
-  if (sel) { await selectRec(sel); revealInTree(sel); } else fitVisible();
+  const ids = (p.get('sel') || '').split(',').filter(Boolean).map((id) => S.byId.get(id)).filter(Boolean);
+  if (ids.length === 1) { await selectRec(ids[0]); revealInTree(ids[0]); }
+  else if (ids.length > 1) selectMany(ids);
+  else fitVisible();
 }
 
 // -------------------------------------------------------------------- init --
@@ -726,9 +874,10 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'g' || e.key === 'G') { S.ghost = !S.ghost; restyle(); }
   else if (e.key === 'i' || e.key === 'I') toggleIso();
   else if (e.key === 'f' || e.key === 'F') { S.sel.size ? focusRecs([...S.sel].map((id) => S.byId.get(id))) : fitVisible(); }
+  else if (e.key === 'l' || e.key === 'L') triggerListen();
 });
 $('#menuBtn').addEventListener('click', () => { const o = document.body.classList.toggle('nav-open'); $('#menuBtn').setAttribute('aria-expanded', o); });
-$('#lang').addEventListener('change', () => { S.lang = $('#lang').value; buildSystems(); syncOn(); runSearch(); if (S.cur) showInfo(siblingsOf(S.cur)); saveHash(); });
+$('#lang').addEventListener('change', () => { stopSpeech(); S.lang = $('#lang').value; buildSystems(); syncOn(); runSearch(); if (S.cur) showInfo(siblingsOf(S.cur)); saveHash(); });
 const syncOn = () => S.sys.forEach((st, k) => { const li = document.querySelector(`.sys[data-key="${k}"]`); li?.classList.toggle('on', st.visible); });
 
 async function init() {
@@ -787,9 +936,11 @@ const atlas = window.atlas = {
   meshesOf: (id) => S.meshes.get(id) || [],              // meshes are only present once their system is loaded
   recsByName: (system, name) => S.M.structures.filter((r) => r.system === system && r.name === name),   // all sides / duplicates of a named structure
   selectRec, selectMany, clearSel, focusRecs, flyTo, restyle, setIso, toggleIso, selectionRecs, showInfo,
+  toggleInSelection, toggleManyInSelection,              // build/shrink a multi-structure selection (isolate several tissue types together)
   wholeOf,                                               // wholeOf(rec) -> every record of the anatomical unit (all heads/parts, both sides of a paired name)
   groupStructures,                                       // groupStructures(system, groupId) -> records under that group, sub-groups included
   registerTab, openMotion, isMuscle, loadFacts, loadVocab,
+  speak, stopSpeech, plainDesc,                          // text-to-speech: speak(text, btn?) toggles that button's "speaking" state
   pickHandler: null,    // set fn(rec|null, landmark|null, pointerEvent) to receive canvas clicks instead of the normal selection; hover names are suppressed while set
   pendingMotion: null,  // set by the muscle "Moves the body at" chips: { joint, movement, muscle }; the motion tab consumes it
   motion: null,         // motion.js assigns { open(req), play(...), stop() }

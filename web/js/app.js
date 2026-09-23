@@ -713,15 +713,23 @@ async function recordMotionCycle(ses, track, compCtx, scale, seconds, views, rec
     atlas.motion.renderPoseNow(); dirty = true;
   }
 }
-// Records the live 3D canvas as a short WebM clip: the open Motion session stepping through its range once if the
-// "include motion" box is checked and one applies here (its captions composited in, at 4 seconds / the session's
-// own speed multiplier), otherwise a plain 4-second 360° turntable of the current selection. Frames are captured
+// Records the live 3D canvas as a short MP4 (or WebM, on browsers that can't mux MP4) clip: the open Motion
+// session stepping through its range once if the "include motion" box is checked and one applies here (its
+// captions composited in, at 4 seconds / the session's own speed multiplier), otherwise a plain 4-second 360°
+// turntable of the current selection. Frames are captured
 // explicitly (captureStream in manual mode + track.requestFrame(), paced to a fixed rate) rather than continuously,
 // so the result can't come out short or empty just because the tab isn't the active/visible one while it records.
 async function runVideoExport(recs) {
   if (!('MediaRecorder' in window) || !canvas.captureStream) { notify('Video recording is not supported in this browser'); return; }
-  const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((t) => MediaRecorder.isTypeSupported(t));
+  // MP4 (H.264) first for universal playback — supported by Chrome/Edge/Safari's MediaRecorder — falling back to
+  // WebM only on browsers (e.g. Firefox) that can't mux MP4 themselves.
+  const mimeType = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=h264', 'video/mp4',
+    'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm',
+  ].find((t) => MediaRecorder.isTypeSupported(t));
   if (!mimeType) { notify('Video recording is not supported in this browser'); return; }
+  const isMp4 = mimeType.startsWith('video/mp4');
+  const ext = isMp4 ? 'mp4' : 'webm';
   const names = [...new Set(recs.map((r) => nameOf(r)))];
   const filename = `z-anatomy_${slug(names[0] || 'selection')}${names.length > 1 ? `-and-${names.length - 1}-more` : ''}`;
   const ses = atlas.motion?.session;
@@ -756,9 +764,9 @@ async function runVideoExport(recs) {
       recorder.stop();
       await stopped;
     }
-    const blob = new Blob(chunks, { type: 'video/webm' });
+    const blob = new Blob(chunks, { type: isMp4 ? 'video/mp4' : 'video/webm' });
     const url = URL.createObjectURL(blob);
-    downloadDataURL(url, `${filename}.webm`);
+    downloadDataURL(url, `${filename}.${ext}`);
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   } finally {
     restoreRes();

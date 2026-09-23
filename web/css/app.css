@@ -137,6 +137,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .export { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
 .export h3 { margin-top: 0; }
 .exp-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; flex-wrap: wrap; }
+.exp-row[hidden] { display: none; }
 .exp-row.col { align-items: flex-start; flex-direction: column; gap: 6px; }
 .exp-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; min-width: 62px; }
 .exp-row.check { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); cursor: pointer; }

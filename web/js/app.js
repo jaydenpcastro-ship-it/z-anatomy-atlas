@@ -594,11 +594,86 @@ async function exportPDF(frames, filename) {
   });
   doc.save(`${filename}.pdf`);
 }
+// Rotates the camera one full turn around the selection's current center over `duration` ms, preserving whatever
+// elevation/distance is already framed, then restores the camera exactly as it was. This is the video export's
+// fallback "motion" when no Motion session is open to record instead.
+// A 0->1->0 triangle wave with eased corners: the shape of one full ping-pong pass through a movement's range,
+// without needing access to the Motion module's own (private) easing.
+const pingpongEase = (p) => { const q = p < 0.5 ? p * 2 : (1 - p) * 2; return q * q * (3 - 2 * q); };
+// Rotates the camera a full turn around the selection's current center, one explicit step at a time, rendering
+// and capturing each step itself rather than relying on the ambient render loop — so it can't come out empty if
+// the tab loses focus mid-recording. Restores the camera exactly as it was afterward.
+async function recordOrbit(recs, track, steps = 72) {
+  const center = boundsOf(recs).getCenter(new THREE.Vector3());
+  const savedP = camera.position.clone(), savedT = controls.target.clone();
+  const offset = savedP.clone().sub(center), axis = new THREE.Vector3(0, 1, 0);
+  controls.target.copy(center);
+  try {
+    for (let i = 0; i < steps; i++) {
+      camera.position.copy(center).add(offset.clone().applyAxisAngle(axis, (i / steps) * Math.PI * 2));
+      camera.lookAt(center);
+      renderer.render(scene, camera);
+      track.requestFrame();
+      await new Promise((r) => setTimeout(r, 33));
+    }
+  } finally {
+    camera.position.copy(savedP); controls.target.copy(savedT); camera.lookAt(savedT); dirty = true;
+  }
+}
+// Steps an open Motion session through one full pass of its range (start -> end -> start), one explicit pose at a
+// time: each pose waits for the Motion module's own per-frame hook to apply it (nextFrames, the same rAF/timeout
+// race already used by the PNG/PDF export), then renders and captures that exact frame itself. This is what makes
+// the recording robust to a backgrounded tab, where the ambient render loop's rAF can go fully idle for seconds.
+async function recordMotionCycle(ses, track, steps = 72) {
+  const saved = { u: ses.u, scrub: ses.scrub, playing: ses.playing, t: ses.t };
+  ses.scrub = true; ses.playing = false;
+  try {
+    for (let i = 0; i < steps; i++) {
+      ses.u = pingpongEase(i / (steps - 1));
+      await nextFrames(2);
+      renderer.render(scene, camera);
+      track.requestFrame();
+    }
+  } finally {
+    ses.u = saved.u; ses.scrub = saved.scrub; ses.playing = saved.playing; ses.t = saved.t;
+  }
+}
+// Records the live 3D canvas as a short WebM clip: the open Motion session stepping through its range once if the
+// "include motion" box is checked and one applies here, otherwise a 360° turntable of the current selection. Frames
+// are captured explicitly (canvas.captureStream in manual mode + track.requestFrame()) rather than continuously, so
+// the result can't come out empty even if the tab isn't the active/visible one while it records.
+async function runVideoExport(recs) {
+  if (!('MediaRecorder' in window) || !canvas.captureStream) { notify('Video recording is not supported in this browser'); return; }
+  const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((t) => MediaRecorder.isTypeSupported(t));
+  if (!mimeType) { notify('Video recording is not supported in this browser'); return; }
+  const names = [...new Set(recs.map((r) => nameOf(r)))];
+  const filename = `z-anatomy_${slug(names[0] || 'selection')}${names.length > 1 ? `-and-${names.length - 1}-more` : ''}`;
+  const ses = atlas.motion?.session;
+  const wantMotion = EXPORT.motion && ses && ses.ready && ses.rec && recs.some((r) => r.id === ses.rec.id);
+  const stream = canvas.captureStream(0); // manual mode: frames are added only via track.requestFrame()
+  const track = stream.getVideoTracks()[0];
+  const chunks = [];
+  const recorder = new MediaRecorder(stream, { mimeType });
+  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  const stopped = new Promise((res) => { recorder.onstop = res; });
+  recorder.start();
+  try {
+    if (wantMotion) await recordMotionCycle(ses, track); else await recordOrbit(recs, track);
+  } finally {
+    recorder.stop();
+    await stopped;
+  }
+  const blob = new Blob(chunks, { type: 'video/webm' });
+  const url = URL.createObjectURL(blob);
+  downloadDataURL(url, `${filename}.webm`);
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
 // Steps the camera through the chosen views (and, if requested, an open Motion session through start/mid/end pose
 // per view), capturing one frame each time, then bundles them into the chosen file and downloads it.
 async function runExport(format) {
   const recs = selectionRecs();
   if (!recs.length) { notify('Nothing selected to export'); return; }
+  if (format === 'video') { await runVideoExport(recs); return; }
   const views = EXPORT.views.size ? [...EXPORT.views] : ['cur'];
   const names = [...new Set(recs.map((r) => nameOf(r)))];
   const systems = [...new Set(recs.map((r) => SYS[r.system]?.[0] || r.system))];
@@ -626,16 +701,19 @@ async function runExport(format) {
 // (when a motion is open for this exact selection) motion poses to capture, and which labels to burn in, then go.
 function buildExportSection() {
   const box = el('div', { className: 'export' });
-  box.append(el('h3', {}, 'Export'), el('p', { className: 'fine' }, 'Downloads exactly what is highlighted in the 3D view now — as a picture, or as pages moving through the chosen views/motion in a PDF.'));
+  box.append(el('h3', {}, 'Export'), el('p', { className: 'fine' }, 'Downloads exactly what is highlighted in the 3D view now — as a picture, as pages moving through the chosen views/motion in a PDF, or as a short 3D motion video.'));
 
   const btn = el('button', { type: 'button', className: 'btn primary exp-go' }, `Download ${EXPORT.format.toUpperCase()}`);
+  const videoNote = el('p', { className: 'fine', hidden: EXPORT.format !== 'video' },
+    'Records the 3D view for a few seconds — the open motion playing through once if "include motion" below is checked, otherwise a 360° turntable of the current selection.');
 
   const fmtBox = el('div', { className: 'chips' });
-  for (const f of ['png', 'pdf']) {
+  for (const f of ['png', 'pdf', 'video']) {
     const chip = el('button', { type: 'button', className: 'chip' + (EXPORT.format === f ? ' prime' : ''), 'aria-pressed': String(EXPORT.format === f) }, f.toUpperCase());
     chip.addEventListener('click', () => {
       EXPORT.format = f; fmtBox.querySelectorAll('.chip').forEach((b) => { b.classList.remove('prime'); b.setAttribute('aria-pressed', 'false'); });
       chip.classList.add('prime'); chip.setAttribute('aria-pressed', 'true'); btn.textContent = `Download ${f.toUpperCase()}`;
+      viewsRow.hidden = labelsRow.hidden = f === 'video'; videoNote.hidden = f !== 'video';
     });
     fmtBox.append(chip);
   }
@@ -658,10 +736,12 @@ function buildExportSection() {
     });
     labelsBox.append(chip);
   }
+  const isVideo = EXPORT.format === 'video';
+  const viewsRow = el('div', { className: 'exp-row col', hidden: isVideo }, el('span', { className: 'exp-label' }, 'Views to capture'), viewsBox);
+  const labelsRow = el('div', { className: 'exp-row col', hidden: isVideo }, el('span', { className: 'exp-label' }, 'Labels to show'), labelsBox);
   box.append(
     el('div', { className: 'exp-row' }, el('span', { className: 'exp-label' }, 'Format'), fmtBox),
-    el('div', { className: 'exp-row col' }, el('span', { className: 'exp-label' }, 'Views to capture'), viewsBox),
-    el('div', { className: 'exp-row col' }, el('span', { className: 'exp-label' }, 'Labels to show'), labelsBox),
+    viewsRow, labelsRow, videoNote,
   );
 
   // The Motion tab's session only finishes loading a moment after this panel is built (it awaits the skeleton
@@ -683,8 +763,8 @@ function buildExportSection() {
   }
 
   btn.addEventListener('click', async () => {
-    btn.disabled = true; const was = btn.textContent; btn.textContent = 'Exporting…';
-    try { await runExport(EXPORT.format); notify('Export ready — check your downloads'); }
+    btn.disabled = true; const was = btn.textContent; btn.textContent = EXPORT.format === 'video' ? 'Recording…' : 'Exporting…';
+    try { await runExport(EXPORT.format); notify(EXPORT.format === 'video' ? 'Recording ready — check your downloads' : 'Export ready — check your downloads'); }
     catch (e) { console.error(e); notify('Export failed — see console for details'); }
     finally { btn.disabled = false; btn.textContent = was; }
   });

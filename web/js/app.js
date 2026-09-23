@@ -270,9 +270,11 @@ const flash = new THREE.Points(new THREE.BufferGeometry().setAttribute('position
   new THREE.PointsMaterial({ size: 16, sizeAttenuation: false, color: 0xffb020, depthTest: false, transparent: true }));
 flash.renderOrder = 11; flash.visible = false; flash.frustumCulled = false; scene.add(flash);
 let pinIds = [];
+let pinIndex = new Map(); // landmark id -> its slot in the pin buffer, kept alongside pinIds
 function rebuildPins() {
   const lms = S.M ? S.M.landmarks.filter((l) => S.sys.get(l.system)?.visible) : [];
   pinIds = lms.map((l) => l.id);
+  pinIndex = new Map(pinIds.map((id, i) => [id, i]));
   const pos = new Float32Array(lms.length * 3), col = new Float32Array(lms.length * 3), c = new THREE.Color();
   lms.forEach((l, i) => { pos.set(l.pos, i * 3); c.set(SYS[l.system]?.[1] || '#ffffff'); col.set([c.r, c.g, c.b], i * 3); });
   pinObj.geometry.dispose();
@@ -280,6 +282,13 @@ function rebuildPins() {
   pinObj.geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   pinObj.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
   pinObj.visible = S.pins && lms.length > 0; dirty = true;
+}
+// Lets an active Motion session keep a bone's landmark pins glued to it while the bone swings (a no-op if that
+// landmark isn't currently rendered as a pin). rebuildPins() is the way back to the rest positions once it stops.
+function movePinTo(id, pos) {
+  const i = pinIndex.get(id); if (i == null) return;
+  pinObj.geometry.attributes.position.array.set([pos.x, pos.y, pos.z], i * 3);
+  pinObj.geometry.attributes.position.needsUpdate = true; dirty = true;
 }
 $('#pinsBtn').addEventListener('click', () => {
   S.pins = !S.pins; $('#pinsBtn').setAttribute('aria-pressed', S.pins); rebuildPins();
@@ -1089,6 +1098,32 @@ $('#menuBtn').addEventListener('click', () => { const o = document.body.classLis
 $('#lang').addEventListener('change', () => { stopSpeech(); S.lang = $('#lang').value; buildSystems(); syncOn(); runSearch(); if (S.cur) showInfo(siblingsOf(S.cur)); saveHash(); });
 const syncOn = () => S.sys.forEach((st, k) => { const li = document.querySelector(`.sys[data-key="${k}"]`); li?.classList.toggle('on', st.visible); });
 
+// A handful of bony landmarks (currently: every left-side one on ~115 skeletal structures) come out of the Blender
+// export with pos [0,0,0] — the world origin, nowhere near the actual bone — instead of their real position, which
+// makes their pin appear to float free of the skeleton rather than sit on it. Paired landmarks are true mirror
+// images of each other (only the X coordinate flips sign, per the model's own left/right bone centres), so any
+// landmark left at the origin can be reconstructed from its opposite-side sibling until the export itself is fixed.
+function repairZeroLandmarks(landmarks) {
+  const isZero = (p) => p[0] === 0 && p[1] === 0 && p[2] === 0;
+  const baseOf = (t) => t.replace(/\.(l|r)$/, '');
+  const bySide = new Map(); // `${system}|${name}|${baseTarget}` -> { l, r }
+  for (const l of landmarks) {
+    const side = l.target.endsWith('.l') ? 'l' : l.target.endsWith('.r') ? 'r' : '';
+    if (!side) continue;
+    const key = `${l.system}|${l.name}|${baseOf(l.target)}`;
+    if (!bySide.has(key)) bySide.set(key, {});
+    bySide.get(key)[side] = l;
+  }
+  let fixed = 0;
+  for (const l of landmarks) {
+    if (!isZero(l.pos)) continue;
+    const mirror = l.target.endsWith('.l') ? 'r' : l.target.endsWith('.r') ? 'l' : null;
+    if (!mirror) continue;
+    const sib = bySide.get(`${l.system}|${l.name}|${baseOf(l.target)}`)?.[mirror];
+    if (sib && !isZero(sib.pos)) { l.pos = [-sib.pos[0], sib.pos[1], sib.pos[2]]; fixed++; }
+  }
+  if (fixed) console.warn(`[Z-Anatomy] Repaired ${fixed} landmark(s) that had no real position (mirrored from the opposite side); the underlying export should be fixed too.`);
+}
 async function init() {
   setLoading('Loading atlas index…', 0.1);
   try {
@@ -1097,6 +1132,7 @@ async function init() {
       fetch(`${CFG.dataBase}i18n.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
     ]);
     S.M = M; S.i18n = i18n;
+    repairZeroLandmarks(S.M.landmarks);
   } catch (e) {
     setLoading(null); $('#browse').append(el('p', { className: 'fine', style: 'padding:8px' }, `Could not load the atlas data (${e.message}). Run tools/export_web.py and serve this folder over http.`)); return;
   }
@@ -1150,6 +1186,7 @@ const atlas = window.atlas = {
   groupStructures,                                       // groupStructures(system, groupId) -> records under that group, sub-groups included
   registerTab, openMotion, isMuscle, loadFacts, loadVocab,
   speak, stopSpeech, plainDesc,                          // text-to-speech: speak(text, btn?) toggles that button's "speaking" state
+  movePinTo, rebuildPins,                                // keep a bone's landmark pins glued to it during an animation; rebuildPins() puts them back at rest
   pickHandler: null,    // set fn(rec|null, landmark|null, pointerEvent) to receive canvas clicks instead of the normal selection; hover names are suppressed while set
   pendingMotion: null,  // set by the muscle "Moves the body at" chips: { joint, movement, muscle }; the motion tab consumes it
   motion: null,         // motion.js assigns { open(req), play(...), stop() }

@@ -174,6 +174,7 @@ function boot() {
     for (const l of S0.labels) l.el.remove();
     S0.hud?.remove();
     atlas.restyle();       // materials + visibility back to the atlas' own selection styling
+    atlas.rebuildPins();   // landmark pins on any bone this session moved go back to their rest position
     atlas.render();
     if (!silent) for (const f of listeners) f('stop');
   }
@@ -370,6 +371,16 @@ function boot() {
       rec.mesh.matrix.copy(rec.Pinv).multiply(b.m).multiply(rec.P).multiply(rec.local0); rec.mesh.matrixWorldNeedsUpdate = true;
     }
     if (S0.pull) skinMuscle(S0);
+  }
+  // Landmark pins are a flat point cloud owned by app.js, not part of the bone hierarchy, so they don't move with
+  // a bone on their own; glue any pin on a bone this session is actually swinging to that bone's current transform.
+  function updateLandmarkPins(S0) {
+    if (!AS.pins) return;
+    for (const [boneId, b] of S0.boneOps) {
+      if (!b.ops.length) continue;
+      const lms = AS.lmByTarget.get(boneId); if (!lms) continue;
+      for (const l of lms) atlas.movePinTo(l.id, new V3(...l.pos).applyMatrix4(b.m));
+    }
   }
   const pointVia = (S0, boneId, q, out = new V3()) => out.copy(q).applyMatrix4(S0.boneOps.get(boneId)?.m || _A.identity());
 
@@ -706,7 +717,7 @@ function boot() {
       const T = S0.mv.circ ? 6.5 : 5, p = (S0.t / T) % 1;
       S0.u = cycle(p, !!S0.mv.circ);
     }
-    evaluate(S0); applyBones(S0); enforce(S0); updateDecor(S0); updateHud(S0);
+    evaluate(S0); applyBones(S0); enforce(S0); updateDecor(S0); updateHud(S0); updateLandmarkPins(S0);
     if (S0.onTick) S0.onTick(S0);
     return true;
   });

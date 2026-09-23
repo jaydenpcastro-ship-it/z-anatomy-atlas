@@ -1098,32 +1098,6 @@ $('#menuBtn').addEventListener('click', () => { const o = document.body.classLis
 $('#lang').addEventListener('change', () => { stopSpeech(); S.lang = $('#lang').value; buildSystems(); syncOn(); runSearch(); if (S.cur) showInfo(siblingsOf(S.cur)); saveHash(); });
 const syncOn = () => S.sys.forEach((st, k) => { const li = document.querySelector(`.sys[data-key="${k}"]`); li?.classList.toggle('on', st.visible); });
 
-// A handful of bony landmarks (currently: every left-side one on ~115 skeletal structures) come out of the Blender
-// export with pos [0,0,0] — the world origin, nowhere near the actual bone — instead of their real position, which
-// makes their pin appear to float free of the skeleton rather than sit on it. Paired landmarks are true mirror
-// images of each other (only the X coordinate flips sign, per the model's own left/right bone centres), so any
-// landmark left at the origin can be reconstructed from its opposite-side sibling until the export itself is fixed.
-function repairZeroLandmarks(landmarks) {
-  const isZero = (p) => p[0] === 0 && p[1] === 0 && p[2] === 0;
-  const baseOf = (t) => t.replace(/\.(l|r)$/, '');
-  const bySide = new Map(); // `${system}|${name}|${baseTarget}` -> { l, r }
-  for (const l of landmarks) {
-    const side = l.target.endsWith('.l') ? 'l' : l.target.endsWith('.r') ? 'r' : '';
-    if (!side) continue;
-    const key = `${l.system}|${l.name}|${baseOf(l.target)}`;
-    if (!bySide.has(key)) bySide.set(key, {});
-    bySide.get(key)[side] = l;
-  }
-  let fixed = 0;
-  for (const l of landmarks) {
-    if (!isZero(l.pos)) continue;
-    const mirror = l.target.endsWith('.l') ? 'r' : l.target.endsWith('.r') ? 'l' : null;
-    if (!mirror) continue;
-    const sib = bySide.get(`${l.system}|${l.name}|${baseOf(l.target)}`)?.[mirror];
-    if (sib && !isZero(sib.pos)) { l.pos = [-sib.pos[0], sib.pos[1], sib.pos[2]]; fixed++; }
-  }
-  if (fixed) console.warn(`[Z-Anatomy] Repaired ${fixed} landmark(s) that had no real position (mirrored from the opposite side); the underlying export should be fixed too.`);
-}
 async function init() {
   setLoading('Loading atlas index…', 0.1);
   try {
@@ -1132,7 +1106,6 @@ async function init() {
       fetch(`${CFG.dataBase}i18n.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
     ]);
     S.M = M; S.i18n = i18n;
-    repairZeroLandmarks(S.M.landmarks);
   } catch (e) {
     setLoading(null); $('#browse').append(el('p', { className: 'fine', style: 'padding:8px' }, `Could not load the atlas data (${e.message}). Run tools/export_web.py and serve this folder over http.`)); return;
   }

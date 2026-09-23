@@ -560,11 +560,6 @@ function captureExportFrame(recs, viewKey, labelOpts, title, subtitle) {
   dirty = true;
   return dataURL;
 }
-// Waits for the motion module's per-frame hook to have run at least once with the new pose. Races rAF against a
-// timeout fallback so an export started just as the tab loses focus (rAF can be paused in background tabs) still
-// finishes instead of hanging forever.
-const oneFrame = () => new Promise((res) => { let done = false; const go = () => { if (!done) { done = true; res(); } }; requestAnimationFrame(go); setTimeout(go, 80); });
-const nextFrames = (n) => { let p = Promise.resolve(); for (let i = 0; i < n; i++) p = p.then(oneFrame); return p; };
 const slug = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'export';
 function downloadDataURL(dataURL, filename) {
   const a = el('a', { href: dataURL, download: filename }); document.body.append(a); a.click(); a.remove();
@@ -594,54 +589,87 @@ async function exportPDF(frames, filename) {
   });
   doc.save(`${filename}.pdf`);
 }
-// Rotates the camera one full turn around the selection's current center over `duration` ms, preserving whatever
-// elevation/distance is already framed, then restores the camera exactly as it was. This is the video export's
-// fallback "motion" when no Motion session is open to record instead.
+const VIDEO_FPS = 30, VIDEO_SECONDS = 4; // baseline length at 1x; motion recordings scale this by 1/speed
 // A 0->1->0 triangle wave with eased corners: the shape of one full ping-pong pass through a movement's range,
 // without needing access to the Motion module's own (private) easing.
 const pingpongEase = (p) => { const q = p < 0.5 ? p * 2 : (1 - p) * 2; return q * q * (3 - 2 * q); };
-// Rotates the camera a full turn around the selection's current center, one explicit step at a time, rendering
-// and capturing each step itself rather than relying on the ambient render loop — so it can't come out empty if
-// the tab loses focus mid-recording. Restores the camera exactly as it was afterward.
-async function recordOrbit(recs, track, steps = 72) {
+// Pads a step out to at least `frameMs` of real wall-clock time, so a video's length stays predictable (steps *
+// frameMs) instead of drifting with however long the step's own work happened to take.
+async function paceStep(stepStart, frameMs) {
+  const left = frameMs - (performance.now() - stepStart);
+  if (left > 0) await new Promise((r) => setTimeout(r, left));
+}
+// Rotates the camera a full turn around the selection's current center over `seconds`, one explicit step at a
+// time, rendering and capturing each step itself rather than relying on the ambient render loop — so it can't
+// come out empty if the tab loses focus mid-recording. Restores the camera exactly as it was afterward.
+async function recordOrbit(recs, track, seconds) {
   const center = boundsOf(recs).getCenter(new THREE.Vector3());
   const savedP = camera.position.clone(), savedT = controls.target.clone();
   const offset = savedP.clone().sub(center), axis = new THREE.Vector3(0, 1, 0);
+  const steps = Math.max(2, Math.round(seconds * VIDEO_FPS)), frameMs = 1000 / VIDEO_FPS;
   controls.target.copy(center);
   try {
     for (let i = 0; i < steps; i++) {
+      const t0 = performance.now();
       camera.position.copy(center).add(offset.clone().applyAxisAngle(axis, (i / steps) * Math.PI * 2));
       camera.lookAt(center);
       renderer.render(scene, camera);
       track.requestFrame();
-      await new Promise((r) => setTimeout(r, 33));
+      await paceStep(t0, frameMs);
     }
   } finally {
     camera.position.copy(savedP); controls.target.copy(savedT); camera.lookAt(savedT); dirty = true;
   }
 }
+// Draws whatever Motion labels are currently on-screen (the same "Fixed: Femur" / axis / degree captions the
+// Motion tab overlays live) onto the composited recording frame, at the exact position and box size the Motion
+// module itself last computed for them (ses.labels' sx/sy/w/h — set moments ago by renderPoseNow -> updateLabels).
+function drawMotionLabels(ctx, ses, scale) {
+  const W = stage.clientWidth, H = stage.clientHeight;
+  ctx.font = `600 ${Math.round(12 * scale)}px system-ui, sans-serif`;
+  ctx.textBaseline = 'top';
+  for (const l of ses.labels || []) {
+    if (l.on === false || !l.el || l.el.style.display === 'none') continue;
+    const text = l.el.textContent; if (!text) continue;
+    const w = l.w ?? l.el.offsetWidth, h = l.h ?? l.el.offsetHeight;
+    const x = Math.min(Math.max(l.sx, 4), Math.max(4, W - 4 - w));
+    const y = Math.min(Math.max(l.sy, 4), Math.max(4, H - 4 - h));
+    ctx.fillStyle = 'rgba(10,14,20,.85)';
+    ctx.fillRect(x * scale, y * scale, w * scale, h * scale);
+    ctx.fillStyle = '#eef3f9';
+    ctx.fillText(text, (x + 7) * scale, (y + 3) * scale);
+  }
+}
 // Steps an open Motion session through one full pass of its range (start -> end -> start), one explicit pose at a
-// time: each pose waits for the Motion module's own per-frame hook to apply it (nextFrames, the same rAF/timeout
-// race already used by the PNG/PDF export), then renders and captures that exact frame itself. This is what makes
-// the recording robust to a backgrounded tab, where the ambient render loop's rAF can go fully idle for seconds.
-async function recordMotionCycle(ses, track, steps = 72) {
+// time: renderPoseNow() applies each pose synchronously (bone transforms, decor, labels), independent of the
+// ambient render loop's own rAF timing, then the frame is composited (3D view + label captions) and captured
+// itself. This is what makes the recording robust to a backgrounded tab, and what lets labels appear at all —
+// they're DOM overlays, invisible to a plain canvas capture.
+async function recordMotionCycle(ses, track, compCtx, scale, seconds) {
   const saved = { u: ses.u, scrub: ses.scrub, playing: ses.playing, t: ses.t };
   ses.scrub = true; ses.playing = false;
+  const steps = Math.max(2, Math.round(seconds * VIDEO_FPS)), frameMs = 1000 / VIDEO_FPS;
   try {
     for (let i = 0; i < steps; i++) {
+      const t0 = performance.now();
       ses.u = pingpongEase(i / (steps - 1));
-      await nextFrames(2);
+      atlas.motion.renderPoseNow();
       renderer.render(scene, camera);
+      compCtx.drawImage(canvas, 0, 0);
+      drawMotionLabels(compCtx, ses, scale);
       track.requestFrame();
+      await paceStep(t0, frameMs);
     }
   } finally {
     ses.u = saved.u; ses.scrub = saved.scrub; ses.playing = saved.playing; ses.t = saved.t;
+    atlas.motion.renderPoseNow();
   }
 }
 // Records the live 3D canvas as a short WebM clip: the open Motion session stepping through its range once if the
-// "include motion" box is checked and one applies here, otherwise a 360° turntable of the current selection. Frames
-// are captured explicitly (canvas.captureStream in manual mode + track.requestFrame()) rather than continuously, so
-// the result can't come out empty even if the tab isn't the active/visible one while it records.
+// "include motion" box is checked and one applies here (its captions composited in, at 4 seconds / the session's
+// own speed multiplier), otherwise a plain 4-second 360° turntable of the current selection. Frames are captured
+// explicitly (captureStream in manual mode + track.requestFrame(), paced to a fixed rate) rather than continuously,
+// so the result can't come out short or empty just because the tab isn't the active/visible one while it records.
 async function runVideoExport(recs) {
   if (!('MediaRecorder' in window) || !canvas.captureStream) { notify('Video recording is not supported in this browser'); return; }
   const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((t) => MediaRecorder.isTypeSupported(t));
@@ -650,7 +678,16 @@ async function runVideoExport(recs) {
   const filename = `z-anatomy_${slug(names[0] || 'selection')}${names.length > 1 ? `-and-${names.length - 1}-more` : ''}`;
   const ses = atlas.motion?.session;
   const wantMotion = EXPORT.motion && ses && ses.ready && ses.rec && recs.some((r) => r.id === ses.rec.id);
-  const stream = canvas.captureStream(0); // manual mode: frames are added only via track.requestFrame()
+  let stream, compCanvas, compCtx;
+  if (wantMotion) {
+    // a separate 2D canvas to composite the 3D frame + label captions onto, since captions are DOM elements the
+    // WebGL canvas alone never contains
+    compCanvas = document.createElement('canvas'); compCanvas.width = canvas.width; compCanvas.height = canvas.height;
+    compCtx = compCanvas.getContext('2d');
+    stream = compCanvas.captureStream(0); // manual mode: frames are added only via track.requestFrame()
+  } else {
+    stream = canvas.captureStream(0);
+  }
   const track = stream.getVideoTracks()[0];
   const chunks = [];
   const recorder = new MediaRecorder(stream, { mimeType });
@@ -658,7 +695,12 @@ async function runVideoExport(recs) {
   const stopped = new Promise((res) => { recorder.onstop = res; });
   recorder.start();
   try {
-    if (wantMotion) await recordMotionCycle(ses, track); else await recordOrbit(recs, track);
+    if (wantMotion) {
+      const scale = compCanvas.width / Math.max(stage.clientWidth, 1);
+      await recordMotionCycle(ses, track, compCtx, scale, VIDEO_SECONDS / (ses.speed || 1));
+    } else {
+      await recordOrbit(recs, track, VIDEO_SECONDS);
+    }
   } finally {
     recorder.stop();
     await stopped;
@@ -686,7 +728,7 @@ async function runExport(format) {
   try {
     for (const v of views) {
       for (const u of uSteps) {
-        if (u != null) { ses.scrub = true; ses.playing = false; ses.u = u; await nextFrames(2); }
+        if (u != null) { ses.scrub = true; ses.playing = false; ses.u = u; atlas.motion.renderPoseNow(); }
         const sub = [systems.join(' · '), `${EXPORT_VIEWS.find(([k]) => k === v)?.[1]} view`, u != null ? `pose ${Math.round(u * 100)}%` : null].filter(Boolean).join(' · ');
         frames.push({ dataURL: captureExportFrame(recs, v, EXPORT.labels, title, sub) });
       }
@@ -705,7 +747,7 @@ function buildExportSection() {
 
   const btn = el('button', { type: 'button', className: 'btn primary exp-go' }, `Download ${EXPORT.format.toUpperCase()}`);
   const videoNote = el('p', { className: 'fine', hidden: EXPORT.format !== 'video' },
-    'Records the 3D view for a few seconds — the open motion playing through once if "include motion" below is checked, otherwise a 360° turntable of the current selection.');
+    'Records a 4-second clip (scaled by the Motion tab’s ½×/2× speed) of the open motion — with its captions and direction arrows — if "include motion" below is checked, otherwise a 4-second 360° turntable of the current selection.');
 
   const fmtBox = el('div', { className: 'chips' });
   for (const f of ['png', 'pdf', 'video']) {

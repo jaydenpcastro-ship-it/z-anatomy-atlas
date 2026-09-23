@@ -246,7 +246,17 @@ function boot() {
     for (const e of S0.enforce) { if (e.mesh.material !== e.mat) e.mesh.material = e.mat; if (e.mesh.visible !== e.vis) e.mesh.visible = e.vis; }
   }
 
-  atlas.motion = { open: (req) => openMotion(req), play: () => setPlaying(true), pause: () => setPlaying(false), stop: () => stopSession(), get session() { return SES; }, data: MO };
+  atlas.motion = {
+    open: (req) => openMotion(req), play: () => setPlaying(true), pause: () => setPlaying(false), stop: () => stopSession(),
+    get session() { return SES; }, data: MO,
+    // Runs the whole per-frame pipeline (pose, bone transforms, decor, labels) synchronously for whatever S0.u
+    // currently is, independent of the ambient render loop's own rAF timing. Used by the video export to step
+    // through poses deterministically instead of hoping a background tab's rAF happens to tick in time.
+    renderPoseNow: () => {
+      const S0 = SES; if (!S0 || !S0.ready) return;
+      evaluate(S0); applyBones(S0); enforce(S0); updateDecor(S0); updateHud(S0); updateLandmarkPins(S0); updateLabels(S0);
+    },
+  };
   window.__motion = { get ses() { return SES; }, MO, startSession, stopSession, targetsFor };
 
   // ----------------------------------------------------------- muscle prep ---

@@ -543,15 +543,19 @@ function composeFrame(srcCanvas, points, title, subtitle) {
 }
 // Repoints the camera at recs for one plane (or leaves it where it is for 'cur'), renders, composes labels, then
 // restores the camera. Synchronous end-to-end so OrbitControls never observes the temporary camera move.
+// Aims the camera at recs from one of the standard planes (or leaves it alone for 'cur'). Shared by the PNG/PDF
+// per-view capture and the video export's plane selection, so both frame a view the exact same way.
+function positionCameraForView(recs, viewKey) {
+  if (viewKey === 'cur') return;
+  const dir = new THREE.Vector3(...VIEWS[viewKey]).normalize();
+  const b = boundsOf(recs), c = b.getCenter(new THREE.Vector3()), r = Math.max(b.getSize(new THREE.Vector3()).length() / 2, 0.02);
+  const vHalf = THREE.MathUtils.degToRad(camera.fov / 2), hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
+  const dist = Math.max(r / Math.sin(Math.min(vHalf, hHalf)) * 1.15, 0.012);
+  camera.position.copy(c.clone().add(dir.multiplyScalar(dist))); controls.target.copy(c); camera.lookAt(c);
+}
 function captureExportFrame(recs, viewKey, labelOpts, title, subtitle) {
   const savedP = camera.position.clone(), savedT = controls.target.clone();
-  if (viewKey !== 'cur') {
-    const dir = new THREE.Vector3(...VIEWS[viewKey]).normalize();
-    const b = boundsOf(recs), c = b.getCenter(new THREE.Vector3()), r = Math.max(b.getSize(new THREE.Vector3()).length() / 2, 0.02);
-    const vHalf = THREE.MathUtils.degToRad(camera.fov / 2), hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
-    const dist = Math.max(r / Math.sin(Math.min(vHalf, hHalf)) * 1.15, 0.012);
-    camera.position.copy(c.clone().add(dir.multiplyScalar(dist))); controls.target.copy(c); camera.lookAt(c);
-  }
+  positionCameraForView(recs, viewKey);
   renderer.render(scene, camera);
   const pts = [];
   for (const lp of labelPointsFor(recs, labelOpts)) { const p = project(lp.pos); if (p.visible) pts.push({ x: p.x, y: p.y, text: lp.text, color: lp.color }); }
@@ -590,14 +594,44 @@ async function exportPDF(frames, filename) {
   doc.save(`${filename}.pdf`);
 }
 const VIDEO_FPS = 30, VIDEO_SECONDS = 4; // baseline length at 1x; motion recordings scale this by 1/speed
+const VIDEO_RES_SCALE = 2, VIDEO_RES_MAX = 1920; // supersample factor and cap (px, longer side) for recordings
+const VIDEO_BITRATE = 8_000_000;
 // A 0->1->0 triangle wave with eased corners: the shape of one full ping-pong pass through a movement's range,
 // without needing access to the Motion module's own (private) easing.
 const pingpongEase = (p) => { const q = p < 0.5 ? p * 2 : (1 - p) * 2; return q * q * (3 - 2 * q); };
-// Pads a step out to at least `frameMs` of real wall-clock time, so a video's length stays predictable (steps *
-// frameMs) instead of drifting with however long the step's own work happened to take.
+// Pads a step out to at least `frameMs` of real wall-clock time — a ceiling on capture rate (never more than
+// ~1/frameMs frames/sec) so a fast machine doesn't over-sample, but never a floor: a step that itself takes
+// longer than frameMs is left alone, so a slow render can't accumulate into the recording running over length.
 async function paceStep(stepStart, frameMs) {
   const left = frameMs - (performance.now() - stepStart);
   if (left > 0) await new Promise((r) => setTimeout(r, left));
+}
+// Temporarily renders at a higher internal resolution than the live view for a sharper recording — the canvas's
+// CSS size (and so everything on screen) is unaffected, only its internal drawing-buffer resolution grows.
+// Returns a function that restores the original size/pixel ratio.
+function boostResolution() {
+  const cssW = stage.clientWidth, cssH = stage.clientHeight;
+  const scale = Math.min(VIDEO_RES_SCALE, VIDEO_RES_MAX / Math.max(cssW, cssH, 1));
+  const prevPR = renderer.getPixelRatio();
+  renderer.setPixelRatio(1);
+  renderer.setSize(Math.max(1, Math.round(cssW * scale)), Math.max(1, Math.round(cssH * scale)), false);
+  return () => { renderer.setPixelRatio(prevPR); renderer.setSize(cssW, cssH, false); dirty = true; };
+}
+// Which standard anatomical plane(s) show this movement cleanly, in place of the Motion tab's own oblique
+// live-study camera angle (chosen there to make the rotation axis legible, not for a clean planar view).
+// Circumduction has no single plane, so it gets two: front and the side it happens on.
+function standardViewsForMotion(ses) {
+  const side = ses.side === 'r' ? 'right' : 'left';
+  if (ses.mv?.circ) return ['front', side];
+  const plane = (ses.mv?.plane || '').toLowerCase();
+  if (plane.includes('sagittal')) return [side];
+  return ['front'];
+}
+// Views to actually record: whatever the user explicitly picked (if anything besides the default "Current"),
+// else the standard plane(s) for this movement.
+function resolveMotionViews(ses) {
+  const chosen = [...EXPORT.views].filter((v) => v !== 'cur');
+  return chosen.length ? chosen : standardViewsForMotion(ses);
 }
 // Rotates the camera a full turn around the selection's current center over `seconds`, one explicit step at a
 // time, rendering and capturing each step itself rather than relying on the ambient render loop — so it can't
@@ -606,12 +640,14 @@ async function recordOrbit(recs, track, seconds) {
   const center = boundsOf(recs).getCenter(new THREE.Vector3());
   const savedP = camera.position.clone(), savedT = controls.target.clone();
   const offset = savedP.clone().sub(center), axis = new THREE.Vector3(0, 1, 0);
-  const steps = Math.max(2, Math.round(seconds * VIDEO_FPS)), frameMs = 1000 / VIDEO_FPS;
+  const totalMs = seconds * 1000, frameMs = 1000 / VIDEO_FPS;
   controls.target.copy(center);
+  const start = performance.now();
   try {
-    for (let i = 0; i < steps; i++) {
-      const t0 = performance.now();
-      camera.position.copy(center).add(offset.clone().applyAxisAngle(axis, (i / steps) * Math.PI * 2));
+    for (;;) {
+      const t0 = performance.now(), elapsed = t0 - start;
+      if (elapsed >= totalMs) break;
+      camera.position.copy(center).add(offset.clone().applyAxisAngle(axis, (elapsed / totalMs) * Math.PI * 2));
       camera.lookAt(center);
       renderer.render(scene, camera);
       track.requestFrame();
@@ -640,29 +676,41 @@ function drawMotionLabels(ctx, ses, scale) {
     ctx.fillText(text, (x + 7) * scale, (y + 3) * scale);
   }
 }
-// Steps an open Motion session through one full pass of its range (start -> end -> start), one explicit pose at a
-// time: renderPoseNow() applies each pose synchronously (bone transforms, decor, labels), independent of the
-// ambient render loop's own rAF timing, then the frame is composited (3D view + label captions) and captured
-// itself. This is what makes the recording robust to a backgrounded tab, and what lets labels appear at all —
-// they're DOM overlays, invisible to a plain canvas capture.
-async function recordMotionCycle(ses, track, compCtx, scale, seconds) {
+// Steps an open Motion session through one full pass of its range (start -> end -> start) from each of `views`
+// in turn (the total `seconds` split evenly across them), one explicit pose at a time: renderPoseNow() applies
+// each pose synchronously (bone transforms, decor, labels), independent of the ambient render loop's own rAF
+// timing, then the frame is composited (3D view + label captions) and captured itself. This is what makes the
+// recording robust to a backgrounded tab, and what lets labels appear at all — they're DOM overlays, invisible
+// to a plain canvas capture.
+// Each view's pose is driven by real elapsed time against that view's wall-clock deadline (not a fixed frame
+// count assumed to take frameMs apiece): a slow machine — high recording resolution costs real render+readback
+// time — just gets fewer, correctly-timed frames instead of a recording that runs long and whose frame timestamps
+// drift out of sync with the pose actually shown (heard as the pose "lagging" behind the video's own clock).
+async function recordMotionCycle(ses, track, compCtx, scale, seconds, views, recs) {
   const saved = { u: ses.u, scrub: ses.scrub, playing: ses.playing, t: ses.t };
+  const savedP = camera.position.clone(), savedT = controls.target.clone();
   ses.scrub = true; ses.playing = false;
-  const steps = Math.max(2, Math.round(seconds * VIDEO_FPS)), frameMs = 1000 / VIDEO_FPS;
+  const perViewMs = (seconds / views.length) * 1000, frameMs = 1000 / VIDEO_FPS;
   try {
-    for (let i = 0; i < steps; i++) {
-      const t0 = performance.now();
-      ses.u = pingpongEase(i / (steps - 1));
-      atlas.motion.renderPoseNow();
-      renderer.render(scene, camera);
-      compCtx.drawImage(canvas, 0, 0);
-      drawMotionLabels(compCtx, ses, scale);
-      track.requestFrame();
-      await paceStep(t0, frameMs);
+    for (const viewKey of views) {
+      positionCameraForView(recs, viewKey);
+      const viewStart = performance.now();
+      for (;;) {
+        const t0 = performance.now(), elapsed = t0 - viewStart;
+        if (elapsed >= perViewMs) break;
+        ses.u = pingpongEase(elapsed / perViewMs);
+        atlas.motion.renderPoseNow();
+        renderer.render(scene, camera);
+        compCtx.drawImage(canvas, 0, 0);
+        drawMotionLabels(compCtx, ses, scale);
+        track.requestFrame();
+        await paceStep(t0, frameMs);
+      }
     }
   } finally {
     ses.u = saved.u; ses.scrub = saved.scrub; ses.playing = saved.playing; ses.t = saved.t;
-    atlas.motion.renderPoseNow();
+    camera.position.copy(savedP); controls.target.copy(savedT); camera.lookAt(savedT);
+    atlas.motion.renderPoseNow(); dirty = true;
   }
 }
 // Records the live 3D canvas as a short WebM clip: the open Motion session stepping through its range once if the
@@ -678,37 +726,43 @@ async function runVideoExport(recs) {
   const filename = `z-anatomy_${slug(names[0] || 'selection')}${names.length > 1 ? `-and-${names.length - 1}-more` : ''}`;
   const ses = atlas.motion?.session;
   const wantMotion = EXPORT.motion && ses && ses.ready && ses.rec && recs.some((r) => r.id === ses.rec.id);
-  let stream, compCanvas, compCtx;
-  if (wantMotion) {
-    // a separate 2D canvas to composite the 3D frame + label captions onto, since captions are DOM elements the
-    // WebGL canvas alone never contains
-    compCanvas = document.createElement('canvas'); compCanvas.width = canvas.width; compCanvas.height = canvas.height;
-    compCtx = compCanvas.getContext('2d');
-    stream = compCanvas.captureStream(0); // manual mode: frames are added only via track.requestFrame()
-  } else {
-    stream = canvas.captureStream(0);
-  }
-  const track = stream.getVideoTracks()[0];
-  const chunks = [];
-  const recorder = new MediaRecorder(stream, { mimeType });
-  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-  const stopped = new Promise((res) => { recorder.onstop = res; });
-  recorder.start();
+  const restoreRes = boostResolution(); // record sharper than the live view; on-screen size is unaffected
   try {
+    let stream, compCanvas, compCtx;
     if (wantMotion) {
-      const scale = compCanvas.width / Math.max(stage.clientWidth, 1);
-      await recordMotionCycle(ses, track, compCtx, scale, VIDEO_SECONDS / (ses.speed || 1));
+      // a separate 2D canvas to composite the 3D frame + label captions onto, since captions are DOM elements the
+      // WebGL canvas alone never contains
+      compCanvas = document.createElement('canvas'); compCanvas.width = canvas.width; compCanvas.height = canvas.height;
+      compCtx = compCanvas.getContext('2d');
+      stream = compCanvas.captureStream(0); // manual mode: frames are added only via track.requestFrame()
     } else {
-      await recordOrbit(recs, track, VIDEO_SECONDS);
+      stream = canvas.captureStream(0);
     }
+    const track = stream.getVideoTracks()[0];
+    const chunks = [];
+    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: VIDEO_BITRATE });
+    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const stopped = new Promise((res) => { recorder.onstop = res; });
+    recorder.start();
+    try {
+      if (wantMotion) {
+        const scale = compCanvas.width / Math.max(stage.clientWidth, 1);
+        const views = resolveMotionViews(ses);
+        await recordMotionCycle(ses, track, compCtx, scale, VIDEO_SECONDS / (ses.speed || 1), views, recs);
+      } else {
+        await recordOrbit(recs, track, VIDEO_SECONDS);
+      }
+    } finally {
+      recorder.stop();
+      await stopped;
+    }
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    downloadDataURL(url, `${filename}.webm`);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
   } finally {
-    recorder.stop();
-    await stopped;
+    restoreRes();
   }
-  const blob = new Blob(chunks, { type: 'video/webm' });
-  const url = URL.createObjectURL(blob);
-  downloadDataURL(url, `${filename}.webm`);
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 // Steps the camera through the chosen views (and, if requested, an open Motion session through start/mid/end pose
 // per view), capturing one frame each time, then bundles them into the chosen file and downloads it.
@@ -747,7 +801,7 @@ function buildExportSection() {
 
   const btn = el('button', { type: 'button', className: 'btn primary exp-go' }, `Download ${EXPORT.format.toUpperCase()}`);
   const videoNote = el('p', { className: 'fine', hidden: EXPORT.format !== 'video' },
-    'Records a 4-second clip (scaled by the Motion tab’s ½×/2× speed) of the open motion — with its captions and direction arrows — if "include motion" below is checked, otherwise a 4-second 360° turntable of the current selection.');
+    'Records a 4-second clip (scaled by the Motion tab’s ½×/2× speed) in high resolution. If "include motion" below is checked, it captures the open motion — with its captions and direction arrows — from standard anatomical views (front/back/left/right, auto-picked for the movement, or use "Views to capture" to choose); otherwise it\'s a 4-second 360° turntable of the current selection.');
 
   const fmtBox = el('div', { className: 'chips' });
   for (const f of ['png', 'pdf', 'video']) {
@@ -755,7 +809,7 @@ function buildExportSection() {
     chip.addEventListener('click', () => {
       EXPORT.format = f; fmtBox.querySelectorAll('.chip').forEach((b) => { b.classList.remove('prime'); b.setAttribute('aria-pressed', 'false'); });
       chip.classList.add('prime'); chip.setAttribute('aria-pressed', 'true'); btn.textContent = `Download ${f.toUpperCase()}`;
-      viewsRow.hidden = labelsRow.hidden = f === 'video'; videoNote.hidden = f !== 'video';
+      labelsRow.hidden = f === 'video'; videoNote.hidden = f !== 'video';
     });
     fmtBox.append(chip);
   }
@@ -779,7 +833,7 @@ function buildExportSection() {
     labelsBox.append(chip);
   }
   const isVideo = EXPORT.format === 'video';
-  const viewsRow = el('div', { className: 'exp-row col', hidden: isVideo }, el('span', { className: 'exp-label' }, 'Views to capture'), viewsBox);
+  const viewsRow = el('div', { className: 'exp-row col' }, el('span', { className: 'exp-label' }, 'Views to capture'), viewsBox);
   const labelsRow = el('div', { className: 'exp-row col', hidden: isVideo }, el('span', { className: 'exp-label' }, 'Labels to show'), labelsBox);
   box.append(
     el('div', { className: 'exp-row' }, el('span', { className: 'exp-label' }, 'Format'), fmtBox),

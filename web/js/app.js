@@ -358,6 +358,7 @@ function stopSpeech() {
   if (speechOk()) speechSynthesis.cancel();
   if (speakBtn) { speakBtn.classList.remove('speaking'); speakBtn.setAttribute('aria-pressed', 'false'); const lbl = $('.lbl', speakBtn); if (lbl) lbl.textContent = speakBtn.dataset.idleLabel || 'Listen'; }
   speakBtn = null;
+  hidePlayerStrip();
 }
 function speakWithBrowser(text, btn) {
   if (!speechOk()) { notify('Text-to-speech is not supported in this browser'); stopSpeech(); return; }
@@ -365,8 +366,12 @@ function speakWithBrowser(text, btn) {
   u.lang = SPEECH_LANG[S.lang] || 'en-US'; u.rate = 0.95;
   u.onend = stopSpeech; u.onerror = stopSpeech;
   speechSynthesis.speak(u);
+  // No pause/speed/loop/favorite strip here: this fallback only fires when the Fish Audio request itself
+  // failed, and SpeechSynthesisUtterance doesn't expose the controls those need cleanly.
 }
-async function speak(text, btn, id) {
+// text, btn: as before. id: stable cache key (see /api/tts). fav: optional favorite descriptor
+// { kind: 'structure'|'group'|'category', name, ...enough fields for goToFavorite() to navigate back }.
+async function speak(text, btn, id, fav) {
   const wasThis = btn && speakBtn === btn;
   stopSpeech();
   if (wasThis) return; // clicking the button that is already speaking just stops it
@@ -380,8 +385,10 @@ async function speak(text, btn, id) {
     if (speakBtn !== btn) return; // stopped while the request was in flight
     speakAudioUrl = URL.createObjectURL(blob);
     speakAudio = new Audio(speakAudioUrl);
+    speakAudio.playbackRate = playbackRate;
     speakAudio.onended = stopSpeech; speakAudio.onerror = stopSpeech;
     await speakAudio.play();
+    if (btn) showPlayerStrip(btn, id, fav);
   } catch (err) {
     if (speakBtn !== btn) return; // already stopped
     speakWithBrowser(text, btn);
@@ -392,7 +399,8 @@ const speakerIcon = () => el('span', { className: 'ico', 'aria-hidden': 'true', 
 // A "Listen" button; getText() may return a string or a Promise<string> (fetched lazily on click).
 // id, when given, is a stable cache key (e.g. "skeletal:Humerus") so /api/tts only ever
 // synthesizes this structure/group/category once instead of on every click across every visitor.
-function listenBtn(getText, label, id) {
+// fav, when given, lets the playback controls' star button favorite/unfavorite this exact audio.
+function listenBtn(getText, label, id, fav) {
   const b = el('button', { className: 'btn listen', type: 'button', 'aria-pressed': 'false', title: label || 'Listen to this explanation' },
     speakerIcon(), el('span', { className: 'lbl' }, 'Listen'));
   b.dataset.idleLabel = 'Listen';
@@ -402,13 +410,117 @@ function listenBtn(getText, label, id) {
     const text = await getText();
     b.disabled = false;
     if (!text) { notify('Nothing to read aloud yet'); return; }
-    speak(text, b, id);
+    speak(text, b, id, fav);
   });
   return b;
 }
 function triggerListen() {
   const b = $('#info .btn.listen');
   if (b) b.click(); else notify('Select a structure or category first, then press L to hear it');
+}
+
+// ------------------------------------------------------- playback controls --
+// A small pause/resume + speed + loop + favorite strip, shared across every Listen button/icon: whichever one
+// most recently started Fish Audio playback gets the strip inserted right after it. Only relevant to the Fish
+// Audio <audio> path (see speak() above) — the browser speechSynthesis fallback never shows it.
+let playerStrip = null, currentPlayId = null, currentPlayFav = null, playbackRate = 1;
+const ICON_PLAY = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M7 5v14l12-7z" fill="currentColor"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" width="14" height="14"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>';
+const ICON_LOOP = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M4 7h11a4 4 0 0 1 4 4v1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M20 17H9a4 4 0 0 1-4-4v-1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M8 4 4 7l4 3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 20l4-3-4-3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_STAR = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+const ICON_STAR_ON = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.8z" fill="currentColor"/></svg>';
+function buildPlayerStrip() {
+  const playBtn = el('button', { type: 'button', className: 'pc-btn pc-play', title: 'Pause', 'aria-label': 'Pause' },
+    el('span', { className: 'ico', innerHTML: ICON_PAUSE }));
+  playBtn.addEventListener('click', () => {
+    if (!speakAudio) return;
+    if (speakAudio.paused) {
+      speakAudio.play().catch(() => {});
+      playBtn.querySelector('.ico').innerHTML = ICON_PAUSE; playBtn.title = 'Pause'; playBtn.setAttribute('aria-label', 'Pause');
+    } else {
+      speakAudio.pause();
+      playBtn.querySelector('.ico').innerHTML = ICON_PLAY; playBtn.title = 'Resume'; playBtn.setAttribute('aria-label', 'Resume');
+    }
+  });
+  const speed = el('input', { type: 'range', className: 'pc-speed', min: '0.2', max: '2', step: '0.1', value: '1',
+    title: 'Playback speed', 'aria-label': 'Playback speed' });
+  const speedLbl = el('span', { className: 'pc-speed-lbl' }, '1.0x');
+  speed.addEventListener('input', () => {
+    playbackRate = parseFloat(speed.value) || 1;
+    speedLbl.textContent = `${playbackRate.toFixed(1)}x`;
+    if (speakAudio) speakAudio.playbackRate = playbackRate;
+  });
+  const loopBtn = el('button', { type: 'button', className: 'pc-btn pc-loop', title: 'Loop', 'aria-label': 'Loop', 'aria-pressed': 'false' },
+    el('span', { className: 'ico', innerHTML: ICON_LOOP }));
+  loopBtn.addEventListener('click', () => {
+    const on = loopBtn.getAttribute('aria-pressed') !== 'true';
+    loopBtn.setAttribute('aria-pressed', String(on));
+    if (speakAudio) speakAudio.loop = on;
+  });
+  const favBtn = el('button', { type: 'button', className: 'pc-btn pc-fav', title: 'Add to favorites', 'aria-label': 'Add to favorites', 'aria-pressed': 'false' },
+    el('span', { className: 'ico', innerHTML: ICON_STAR }));
+  favBtn.addEventListener('click', () => {
+    if (!currentPlayId || !currentPlayFav) return;
+    toggleFavorite(currentPlayId, currentPlayFav);
+    const on = isFavorite(currentPlayId);
+    favBtn.querySelector('.ico').innerHTML = on ? ICON_STAR_ON : ICON_STAR;
+    favBtn.classList.toggle('on', on); favBtn.setAttribute('aria-pressed', String(on));
+    favBtn.title = on ? 'Remove from favorites' : 'Add to favorites'; favBtn.setAttribute('aria-label', favBtn.title);
+  });
+  const strip = el('div', { className: 'listen-controls', role: 'group', 'aria-label': 'Playback controls' },
+    playBtn, el('span', { className: 'pc-speedwrap' }, speed, speedLbl), loopBtn, favBtn);
+  Object.assign(strip, { _playBtn: playBtn, _speed: speed, _speedLbl: speedLbl, _loopBtn: loopBtn, _favBtn: favBtn });
+  return strip;
+}
+const ensurePlayerStrip = () => (playerStrip ||= buildPlayerStrip());
+function showPlayerStrip(afterEl, id, fav) {
+  const strip = ensurePlayerStrip();
+  currentPlayId = id || null; currentPlayFav = fav || null;
+  strip._playBtn.querySelector('.ico').innerHTML = ICON_PAUSE; strip._playBtn.title = 'Pause'; strip._playBtn.setAttribute('aria-label', 'Pause');
+  strip._loopBtn.setAttribute('aria-pressed', 'false'); if (speakAudio) speakAudio.loop = false;
+  strip._speed.value = String(playbackRate); strip._speedLbl.textContent = `${playbackRate.toFixed(1)}x`;
+  const favOn = !!id && isFavorite(id);
+  strip._favBtn.hidden = !id; // nothing stable to favorite (e.g. the "currently selected" readout)
+  strip._favBtn.querySelector('.ico').innerHTML = favOn ? ICON_STAR_ON : ICON_STAR;
+  strip._favBtn.classList.toggle('on', favOn); strip._favBtn.setAttribute('aria-pressed', String(favOn));
+  strip._favBtn.title = favOn ? 'Remove from favorites' : 'Add to favorites'; strip._favBtn.setAttribute('aria-label', strip._favBtn.title);
+  strip.hidden = false;
+  afterEl.insertAdjacentElement('afterend', strip);
+}
+function hidePlayerStrip() {
+  if (playerStrip) playerStrip.hidden = true;
+  currentPlayId = null; currentPlayFav = null;
+}
+
+// ------------------------------------------------------------------ favorites --
+// Favorited structures/groups/categories are tagged locally (by the same id used for TTS caching) so their
+// audio — and the structure itself — can be found again from the sidebar without re-browsing the tree. Stored
+// in localStorage: this is a static site with no accounts/backend, so per-browser storage is the right fit.
+const FAV_KEY = 'atlas.favorites.v1';
+function loadFavorites() {
+  try { return new Map(JSON.parse(localStorage.getItem(FAV_KEY) || '[]')); } catch { return new Map(); }
+}
+const favorites = loadFavorites();
+function saveFavorites() { try { localStorage.setItem(FAV_KEY, JSON.stringify([...favorites])); } catch { /* storage unavailable/full: favorites just won't persist */ } }
+const isFavorite = (id) => !!id && favorites.has(id);
+function toggleFavorite(id, fav) {
+  if (!id || !fav) return;
+  if (favorites.has(id)) favorites.delete(id); else favorites.set(id, { id, ...fav });
+  saveFavorites();
+  if (showFavorites) renderFavorites();
+}
+// Re-navigates to a favorited structure/group/category from its stored descriptor (see the fav objects built
+// at each listenBtn/speak call site below).
+function goToFavorite(fav) {
+  if (fav.kind === 'structure') {
+    const rec = S.byId.get(fav.recId);
+    if (rec) { selectRec(rec); revealInTreeSoon(rec); } else notify('That structure is no longer available');
+  } else if (fav.kind === 'group') {
+    const g = S.groups.get(fav.groupId);
+    if (g) selectGroup(g, fav.system); else notify('That group is no longer available');
+  } else if (fav.kind === 'category') {
+    showCategoryInfo(fav.key);
+  }
 }
 
 // -------------------------------------------------------------- selection ---
@@ -1050,7 +1162,8 @@ async function showInfo(sib) {
     el('button', { className: 'btn', onclick: () => { S.ghost = !S.ghost; restyle(); } }, 'Ghost others'),
     el('button', { className: 'btn', onclick: () => navigator.clipboard?.writeText(location.href) }, 'Copy link'),
     listenBtn(async () => `${nameOf(rec)}. ${plainDesc((await descFor(rec.system))[rec.name] || '', rec.name) || 'No written description is available for this structure yet.'}`,
-      `Listen to the description of ${nameOf(rec)}`, `${rec.system}:${rec.name}`)));
+      `Listen to the description of ${nameOf(rec)}`, `${rec.system}:${rec.name}`,
+      { kind: 'structure', recId: rec.id, system: rec.system, name: nameOf(rec) })));
   const tabs = TABS.filter((t) => t.applies(sib));
   const active = tabs.find((t) => t.id === S.tab) || tabs[0];
   if (tabs.length > 1) {
@@ -1146,7 +1259,8 @@ async function selectGroup(g, sys) {
   const t = (await descFor(g.system))[g.name];
   if (t) {
     holder.append(el('h3', {}, 'Description'), fmtDesc(t, g.name), el('p', { className: 'fine' }, 'Text: Wikipedia, CC BY-SA.'),
-      listenBtn(() => `${gname(g)}. ${plainDesc(t, g.name)}`, `Listen to the description of ${gname(g)}`, `${g.system}:${g.name}`));
+      listenBtn(() => `${gname(g)}. ${plainDesc(t, g.name)}`, `Listen to the description of ${gname(g)}`, `${g.system}:${g.name}`,
+        { kind: 'group', groupId: g.id, system: g.system, name: gname(g) }));
   }
 }
 function appendItems(ul, sys, gid) {
@@ -1170,7 +1284,8 @@ function showCategoryInfo(k) {
   stopSpeech();
   const [label, color] = SYS[k] || [k, '#888'];
   const box = el('div', { className: 'empty', style: `--dot:${color}` }, el('h2', {}, label));
-  box.append(listenBtn(() => SYS_BLURB[k] || label, `Listen to an explanation of ${label}`, `category:${k}`));
+  box.append(listenBtn(() => SYS_BLURB[k] || label, `Listen to an explanation of ${label}`, `category:${k}`,
+    { kind: 'category', key: k, system: k, name: label }));
   box.append(el('p', {}, SYS_BLURB[k] || 'No explanation is available yet for this category.'));
   $('#info').replaceChildren(box);
 }
@@ -1188,7 +1303,7 @@ function buildSystems() {
       title: `Listen to an explanation of ${label}`, 'aria-label': `Listen to an explanation of ${label}` }, speakerIcon());
     listen.addEventListener('click', () => {
       if (listen.classList.contains('speaking')) { stopSpeech(); return; }
-      showCategoryInfo(k); speak(SYS_BLURB[k] || label, listen, `category:${k}`);
+      showCategoryInfo(k); speak(SYS_BLURB[k] || label, listen, `category:${k}`, { kind: 'category', key: k, system: k, name: label });
     });
     head.append(th, name, el('div', { className: 'sys-controls' }, eye, listen));
     const prog = el('div', { className: 'sys-prog' });
@@ -1225,6 +1340,7 @@ function revealInTree(rec) {
 function rank(name, q) { const n = name.toLowerCase(); return n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : 3; }
 const F = { q: '', tag: 'ALL', joint: 'ALL', cart: 'ALL', lm: true };
 function runSearch() {
+  if (showFavorites) { renderFavorites(); return; } // favorites view replaces normal search/browse until toggled off
   F.q = $('#q').value.trim().toLowerCase(); F.tag = $('#fSystem').value; F.joint = $('#fJoint').value; F.cart = $('#fCart').value; F.lm = $('#fLandmarks').checked;
   const active = F.q || F.tag !== 'ALL' || F.joint !== 'ALL' || F.cart !== 'ALL';
   $('#clearFilters').hidden = !(F.tag !== 'ALL' || F.joint !== 'ALL' || F.cart !== 'ALL');
@@ -1271,6 +1387,42 @@ const revealInTreeSoon = (rec) => setTimeout(() => revealInTree(rec), 0);
 $('#q').addEventListener('input', debounce(runSearch, 120));
 ['#fSystem', '#fJoint', '#fCart', '#fLandmarks'].forEach((s) => $(s).addEventListener('change', runSearch));
 $('#clearFilters').addEventListener('click', () => { $('#fSystem').value = $('#fJoint').value = $('#fCart').value = 'ALL'; runSearch(); });
+
+// A "Favorites" view swapped into the same #results panel search normally uses (so favorited structures,
+// groups and categories stay findable without a separate part of the UI to maintain) — toggled by a star
+// button next to the search box; the search box itself, while this view is open, filters within favorites.
+let showFavorites = false;
+const favToggleBtn = el('button', { type: 'button', className: 'fav-toggle', title: 'Show favorites', 'aria-label': 'Show favorites', 'aria-pressed': 'false' },
+  el('span', { className: 'ico', innerHTML: ICON_STAR }));
+function setFavoritesMode(on) {
+  showFavorites = on;
+  favToggleBtn.classList.toggle('on', on); favToggleBtn.setAttribute('aria-pressed', String(on));
+  favToggleBtn.title = on ? 'Back to search' : 'Show favorites'; favToggleBtn.setAttribute('aria-label', favToggleBtn.title);
+  $('.filters').hidden = on;
+  if (on) renderFavorites(); else runSearch();
+}
+favToggleBtn.addEventListener('click', () => setFavoritesMode(!showFavorites));
+$('.search').append(favToggleBtn);
+const FAV_KIND_LABEL = { structure: 'Structure', group: 'Group', category: 'Category' };
+function renderFavorites() {
+  $('#browse').hidden = true; $('#results').hidden = false; $('#clearFilters').hidden = true;
+  const q = $('#q').value.trim().toLowerCase();
+  const list = [...favorites.values()].filter((f) => !q || (f.name || '').toLowerCase().includes(q))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const box = $('#results'); box.replaceChildren();
+  box.append(el('div', { className: 'count' }, `${list.length} favorite${list.length === 1 ? '' : 's'}`));
+  if (!list.length) { box.append(el('p', { className: 'fine', style: 'padding:0 8px' }, 'Nothing favorited yet — press the star on a "Listen" button’s playback controls to save it here.')); return; }
+  for (const f of list) {
+    const color = SYS[f.system]?.[1] || '#888';
+    const btn = el('button', { className: 'res', type: 'button', style: `--dot:${color}` },
+      el('div', { className: 't' }, el('span', { className: 'dot' }), f.name || f.id, el('span', { className: 'pill' }, FAV_KIND_LABEL[f.kind] || f.kind)),
+      el('div', { className: 'p' }, SYS[f.system]?.[0] || ''));
+    btn.addEventListener('click', () => goToFavorite(f));
+    const x = el('button', { className: 'x', type: 'button', title: `Remove ${f.name || f.id} from favorites`, 'aria-label': `Remove ${f.name || f.id} from favorites` }, '×');
+    x.addEventListener('click', (e) => { e.stopPropagation(); toggleFavorite(f.id, f); });
+    box.append(el('div', { className: 'fav-row' }, btn, x));
+  }
+}
 function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 function fillSelect(sel, opts) { sel.replaceChildren(...opts.map(([v, l]) => el('option', { value: v }, l))); }
 

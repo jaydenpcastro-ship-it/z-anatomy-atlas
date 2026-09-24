@@ -345,26 +345,47 @@ canvas.addEventListener('pointerup', (e) => {
 // ----------------------------------------------------------- text-to-speech --
 // Reads category, group and structure explanations aloud so the atlas can be studied hands-free. One utterance
 // plays at a time; the button that started it doubles as its stop control (aria-pressed + a "speaking" style).
+// Primary voice is the Fish Audio model served via /api/tts (see web/api/tts.js); the browser's built-in
+// speechSynthesis is a fallback for when that request fails (offline, quota, misconfigured key, etc).
 const SPEECH_LANG = { en: 'en-US', la: 'la', fr: 'fr-FR', es: 'es-ES', pt: 'pt-PT' };
 const speechOk = () => 'speechSynthesis' in window;
 let speakBtn = null;
+let speakAudio = null;
+let speakAudioUrl = null;
 function stopSpeech() {
+  if (speakAudio) { speakAudio.onended = null; speakAudio.onerror = null; speakAudio.pause(); speakAudio = null; }
+  if (speakAudioUrl) { URL.revokeObjectURL(speakAudioUrl); speakAudioUrl = null; }
   if (speechOk()) speechSynthesis.cancel();
   if (speakBtn) { speakBtn.classList.remove('speaking'); speakBtn.setAttribute('aria-pressed', 'false'); const lbl = $('.lbl', speakBtn); if (lbl) lbl.textContent = speakBtn.dataset.idleLabel || 'Listen'; }
   speakBtn = null;
 }
-function speak(text, btn) {
-  if (!speechOk()) { notify('Text-to-speech is not supported in this browser'); return; }
+function speakWithBrowser(text, btn) {
+  if (!speechOk()) { notify('Text-to-speech is not supported in this browser'); stopSpeech(); return; }
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = SPEECH_LANG[S.lang] || 'en-US'; u.rate = 0.95;
+  u.onend = stopSpeech; u.onerror = stopSpeech;
+  speechSynthesis.speak(u);
+}
+async function speak(text, btn) {
   const wasThis = btn && speakBtn === btn;
   stopSpeech();
   if (wasThis) return; // clicking the button that is already speaking just stops it
   if (!text) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = SPEECH_LANG[S.lang] || 'en-US'; u.rate = 0.95;
-  u.onend = stopSpeech; u.onerror = stopSpeech;
   speakBtn = btn || null;
   if (btn) { btn.classList.add('speaking'); btn.setAttribute('aria-pressed', 'true'); const lbl = $('.lbl', btn); if (lbl) lbl.textContent = 'Stop'; }
-  speechSynthesis.speak(u);
+  try {
+    const res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+    if (!res.ok) throw new Error(`tts ${res.status}`);
+    const blob = await res.blob();
+    if (speakBtn !== btn) return; // stopped while the request was in flight
+    speakAudioUrl = URL.createObjectURL(blob);
+    speakAudio = new Audio(speakAudioUrl);
+    speakAudio.onended = stopSpeech; speakAudio.onerror = stopSpeech;
+    await speakAudio.play();
+  } catch (err) {
+    if (speakBtn !== btn) return; // already stopped
+    speakWithBrowser(text, btn);
+  }
 }
 const speakerIcon = () => el('span', { className: 'ico', 'aria-hidden': 'true', innerHTML:
   '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M19 6a9 9 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" opacity=".6"/></svg>' });

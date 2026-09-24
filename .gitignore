@@ -18,3 +18,9 @@ web/nav_test_log.txt
 tools/browser/node_modules/
 tools/browser/package-lock.json
 _shots/
+
+# secrets
+.env
+.env.local
+.env*.local
+!.env.example

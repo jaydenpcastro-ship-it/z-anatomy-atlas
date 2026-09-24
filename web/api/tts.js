@@ -6,6 +6,18 @@
 const crypto = require('crypto');
 const { head, put } = require('@vercel/blob');
 
+// Some Wikipedia-derived descriptions run past 20k characters — tens of minutes of narration
+// nobody is going to sit through, and slow enough to synthesize that it blows past any
+// reasonable function timeout. Cap what's actually spoken; the full text still reads fine on
+// the page. Cut at the last sentence boundary before the cap rather than mid-word.
+const MAX_NARRATION_CHARS = 4000;
+function capNarration(text) {
+  if (text.length <= MAX_NARRATION_CHARS) return text;
+  const cut = text.lastIndexOf('. ', MAX_NARRATION_CHARS);
+  const end = cut > MAX_NARRATION_CHARS * 0.5 ? cut + 1 : MAX_NARRATION_CHARS;
+  return `${text.slice(0, end)} The full text continues above.`;
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
 
@@ -40,7 +52,7 @@ module.exports = async function handler(req, res) {
         'Content-Type': 'application/json',
         model,
       },
-      body: JSON.stringify({ text, reference_id: referenceId, format: 'mp3' }),
+      body: JSON.stringify({ text: capNarration(text), reference_id: referenceId, format: 'mp3' }),
     });
   } catch (err) {
     res.status(502).json({ error: 'Failed to reach Fish Audio' });

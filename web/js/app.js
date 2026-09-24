@@ -366,7 +366,7 @@ function speakWithBrowser(text, btn) {
   u.onend = stopSpeech; u.onerror = stopSpeech;
   speechSynthesis.speak(u);
 }
-async function speak(text, btn) {
+async function speak(text, btn, id) {
   const wasThis = btn && speakBtn === btn;
   stopSpeech();
   if (wasThis) return; // clicking the button that is already speaking just stops it
@@ -374,7 +374,7 @@ async function speak(text, btn) {
   speakBtn = btn || null;
   if (btn) { btn.classList.add('speaking'); btn.setAttribute('aria-pressed', 'true'); const lbl = $('.lbl', btn); if (lbl) lbl.textContent = 'Stop'; }
   try {
-    const res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+    const res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, id }) });
     if (!res.ok) throw new Error(`tts ${res.status}`);
     const blob = await res.blob();
     if (speakBtn !== btn) return; // stopped while the request was in flight
@@ -390,7 +390,9 @@ async function speak(text, btn) {
 const speakerIcon = () => el('span', { className: 'ico', 'aria-hidden': 'true', innerHTML:
   '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M19 6a9 9 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" opacity=".6"/></svg>' });
 // A "Listen" button; getText() may return a string or a Promise<string> (fetched lazily on click).
-function listenBtn(getText, label) {
+// id, when given, is a stable cache key (e.g. "skeletal:Humerus") so /api/tts only ever
+// synthesizes this structure/group/category once instead of on every click across every visitor.
+function listenBtn(getText, label, id) {
   const b = el('button', { className: 'btn listen', type: 'button', 'aria-pressed': 'false', title: label || 'Listen to this explanation' },
     speakerIcon(), el('span', { className: 'lbl' }, 'Listen'));
   b.dataset.idleLabel = 'Listen';
@@ -400,7 +402,7 @@ function listenBtn(getText, label) {
     const text = await getText();
     b.disabled = false;
     if (!text) { notify('Nothing to read aloud yet'); return; }
-    speak(text, b);
+    speak(text, b, id);
   });
   return b;
 }
@@ -1048,7 +1050,7 @@ async function showInfo(sib) {
     el('button', { className: 'btn', onclick: () => { S.ghost = !S.ghost; restyle(); } }, 'Ghost others'),
     el('button', { className: 'btn', onclick: () => navigator.clipboard?.writeText(location.href) }, 'Copy link'),
     listenBtn(async () => `${nameOf(rec)}. ${plainDesc((await descFor(rec.system))[rec.name] || '', rec.name) || 'No written description is available for this structure yet.'}`,
-      `Listen to the description of ${nameOf(rec)}`)));
+      `Listen to the description of ${nameOf(rec)}`, `${rec.system}:${rec.name}`)));
   const tabs = TABS.filter((t) => t.applies(sib));
   const active = tabs.find((t) => t.id === S.tab) || tabs[0];
   if (tabs.length > 1) {
@@ -1144,7 +1146,7 @@ async function selectGroup(g, sys) {
   const t = (await descFor(g.system))[g.name];
   if (t) {
     holder.append(el('h3', {}, 'Description'), fmtDesc(t, g.name), el('p', { className: 'fine' }, 'Text: Wikipedia, CC BY-SA.'),
-      listenBtn(() => `${gname(g)}. ${plainDesc(t, g.name)}`, `Listen to the description of ${gname(g)}`));
+      listenBtn(() => `${gname(g)}. ${plainDesc(t, g.name)}`, `Listen to the description of ${gname(g)}`, `${g.system}:${g.name}`));
   }
 }
 function appendItems(ul, sys, gid) {
@@ -1168,7 +1170,7 @@ function showCategoryInfo(k) {
   stopSpeech();
   const [label, color] = SYS[k] || [k, '#888'];
   const box = el('div', { className: 'empty', style: `--dot:${color}` }, el('h2', {}, label));
-  box.append(listenBtn(() => SYS_BLURB[k] || label, `Listen to an explanation of ${label}`));
+  box.append(listenBtn(() => SYS_BLURB[k] || label, `Listen to an explanation of ${label}`, `category:${k}`));
   box.append(el('p', {}, SYS_BLURB[k] || 'No explanation is available yet for this category.'));
   $('#info').replaceChildren(box);
 }
@@ -1186,7 +1188,7 @@ function buildSystems() {
       title: `Listen to an explanation of ${label}`, 'aria-label': `Listen to an explanation of ${label}` }, speakerIcon());
     listen.addEventListener('click', () => {
       if (listen.classList.contains('speaking')) { stopSpeech(); return; }
-      showCategoryInfo(k); speak(SYS_BLURB[k] || label, listen);
+      showCategoryInfo(k); speak(SYS_BLURB[k] || label, listen, `category:${k}`);
     });
     head.append(th, name, el('div', { className: 'sys-controls' }, eye, listen));
     const prog = el('div', { className: 'sys-prog' });

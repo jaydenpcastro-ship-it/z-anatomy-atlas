@@ -17,6 +17,7 @@ renders/
 web/nav_test_log.txt
 tools/browser/node_modules/
 tools/browser/package-lock.json
+web/node_modules/
 _shots/
 
 # secrets

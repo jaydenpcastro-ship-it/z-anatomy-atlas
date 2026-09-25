@@ -5,8 +5,8 @@
 // store is connected). See web/.env.example and lib/tts-audio.js for the audio format.
 //
 // The browser reads cached audio straight from the public Blob URL first (ATLAS_CONFIG.ttsBase),
-// so this function — and its head() call, which counts against the Hobby plan's advanced-operation
-// quota — only runs on a cache miss.
+// so this function — its head() and the put() that follows, the latter counting against the Hobby
+// plan's 2,000/month Blob advanced operations — only runs on a cache miss.
 const { head, put } = require('@vercel/blob');
 const { cachePathname, synthesize, fishConfig } = require('../lib/tts-audio');
 

@@ -3,10 +3,15 @@
 // description and category blurb and stores it in the same Vercel Blob cache api/tts.js
 // reads from, so no real visitor ever pays the first-generation cost. Safe to re-run --
 // already-cached entries are skipped (one paginated list() of the cache prefix rather than a
-// head() per entry: both are Blob "advanced operations", and the Hobby plan only includes 2,000
-// a month), and it also picks up any entries that were added to data/desc/*.json since the last run.
+// head() per entry), and it also picks up any entries that were added to data/desc/*.json since
+// the last run.
 //
-// Usage (from web/): node scripts/warm-tts-cache.js [--limit=N] [--concurrency=N] [--prune]
+// Hobby-plan budget: every put() is a Blob "advanced operation" and the plan includes 2,000 a
+// month, so a full warm (~2,700 entries) must be spread over two billing cycles — run with
+// --max-new=1500 (leaves headroom for live /api/tts misses), then again next cycle.
+//
+// Usage (from web/): node scripts/warm-tts-cache.js [--max-new=N] [--limit=N] [--concurrency=N] [--prune]
+//   --max-new stops after generating N new entries (already-cached ones don't count).
 //   --prune deletes every tts/ blob outside the current CACHE_PREFIX (old audio formats) first,
 //   to free Blob storage after a format change. Nothing else is deleted.
 // Requires web/.env.local with FISH_AUDIO_API_KEY, FISH_AUDIO_VOICE_ID (optional),
@@ -71,9 +76,11 @@ async function listAll(prefix) {
   return blobs;
 }
 
-async function warmOne(id, text, stats, cached) {
+async function warmOne(id, text, stats, cached, maxNew) {
   const pathname = cachePathname(id);
   if (cached.has(pathname)) { stats.skipped++; return; }
+  if (stats.started >= maxNew) { stats.deferred++; return; }
+  stats.started++;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const audio = await synthesize(text, FISH);
@@ -125,12 +132,14 @@ async function main() {
   const cached = new Set((await listAll(CACHE_PREFIX)).map((b) => b.pathname));
 
   console.log(`Warming ${toRun.length} of ${jobs.length} entries (model=${FISH.model}, voice=${FISH.referenceId}, ${cached.size} already cached)...`);
-  const stats = { generated: 0, skipped: 0, failed: 0, failures: [] };
+  const stats = { generated: 0, skipped: 0, failed: 0, deferred: 0, started: 0, failures: [] };
+  const maxNewArg = process.argv.find((a) => a.startsWith('--max-new='));
+  const maxNew = maxNewArg ? parseInt(maxNewArg.split('=')[1], 10) : Infinity;
   let done = 0;
   const started = Date.now();
   const concurrency = parseInt((process.argv.find((a) => a.startsWith('--concurrency=')) || '').split('=')[1], 10) || 8;
   await pool(toRun, async (job) => {
-    await warmOne(job.id, job.text, stats, cached);
+    await warmOne(job.id, job.text, stats, cached, maxNew);
     done++;
     if (done % 25 === 0 || done === toRun.length) {
       const elapsed = ((Date.now() - started) / 1000).toFixed(0);
@@ -139,7 +148,7 @@ async function main() {
   }, concurrency);
 
   console.log('--- done ---');
-  console.log(JSON.stringify({ generated: stats.generated, skipped: stats.skipped, failed: stats.failed }, null, 2));
+  console.log(JSON.stringify({ generated: stats.generated, skipped: stats.skipped, failed: stats.failed, deferred: stats.deferred }, null, 2));
   if (stats.failures.length) {
     const failPath = path.join(__dirname, 'warm-tts-failures.json');
     fs.writeFileSync(failPath, JSON.stringify(stats.failures, null, 2));

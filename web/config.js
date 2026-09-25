@@ -6,4 +6,7 @@ window.ATLAS_CONFIG = {
   modelBase: "models/",
   dataBase: "data/",
   imgBase: "img/",
+  // Public Vercel Blob folder holding cached narration (see web/lib/tts-audio.js). The browser reads
+  // it directly and only calls /api/tts on a miss. Empty string = always go through /api/tts.
+  ttsBase: "https://l1qhqfrwf7tk6lyd.public.blob.vercel-storage.com/tts/v2/",
 };

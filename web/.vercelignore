@@ -1,0 +1,6 @@
+# Local-only files that shouldn't ship with a `vercel` CLI deploy (git deploys already skip gitignored files).
+scripts/
+*.bak-*
+*_log.txt
+*_err.txt
+.env.local

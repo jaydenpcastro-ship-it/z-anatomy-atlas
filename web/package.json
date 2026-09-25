@@ -1,6 +1,7 @@
 {
   "private": true,
   "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
     "@vercel/blob": "^2.8.0"
   }
 }

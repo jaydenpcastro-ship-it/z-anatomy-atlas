@@ -369,6 +369,24 @@ function speakWithBrowser(text, btn) {
   // No pause/speed/loop/favorite strip here: this fallback only fires when the Fish Audio request itself
   // failed, and SpeechSynthesisUtterance doesn't expose the controls those need cleanly.
 }
+// Cached narration is read straight from the public Blob store (no function invocation, no Blob
+// advanced operation); only a miss goes through /api/tts, which synthesizes and caches it.
+// The key must match cachePathname() in web/lib/tts-audio.js.
+async function ttsKey(idOrText) {
+  const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(idOrText));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+async function fetchTtsAudio(text, id) {
+  if (CFG.ttsBase && crypto.subtle) {
+    try {
+      const r = await fetch(`${CFG.ttsBase}${await ttsKey(id || text)}.mp3`);
+      if (r.ok) return r.blob();
+    } catch (err) { /* miss or blocked — fall through to the function */ }
+  }
+  const res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, id }) });
+  if (!res.ok) throw new Error(`tts ${res.status}`);
+  return res.blob();
+}
 // text, btn: as before. id: stable cache key (see /api/tts). fav: optional favorite descriptor
 // { kind: 'structure'|'group'|'category', name, ...enough fields for goToFavorite() to navigate back }.
 async function speak(text, btn, id, fav) {
@@ -379,9 +397,7 @@ async function speak(text, btn, id, fav) {
   speakBtn = btn || null;
   if (btn) { btn.classList.add('speaking'); btn.setAttribute('aria-pressed', 'true'); const lbl = $('.lbl', btn); if (lbl) lbl.textContent = 'Stop'; }
   try {
-    const res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, id }) });
-    if (!res.ok) throw new Error(`tts ${res.status}`);
-    const blob = await res.blob();
+    const blob = await fetchTtsAudio(text, id);
     if (speakBtn !== btn) return; // stopped while the request was in flight
     speakAudioUrl = URL.createObjectURL(blob);
     speakAudio = new Audio(speakAudioUrl);

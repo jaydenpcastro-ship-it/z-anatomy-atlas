@@ -2,17 +2,20 @@
 // One-off (re-runnable) batch job: pre-generates Fish Audio TTS for every structure/group
 // description and category blurb and stores it in the same Vercel Blob cache api/tts.js
 // reads from, so no real visitor ever pays the first-generation cost. Safe to re-run --
-// already-cached entries are skipped via head(), and it also picks up any entries that were
-// added to data/desc/*.json since the last run.
+// already-cached entries are skipped (one paginated list() of the cache prefix rather than a
+// head() per entry: both are Blob "advanced operations", and the Hobby plan only includes 2,000
+// a month), and it also picks up any entries that were added to data/desc/*.json since the last run.
 //
-// Usage (from web/): node scripts/warm-tts-cache.js
+// Usage (from web/): node scripts/warm-tts-cache.js [--limit=N] [--concurrency=N] [--prune]
+//   --prune deletes every tts/ blob outside the current CACHE_PREFIX (old audio formats) first,
+//   to free Blob storage after a format change. Nothing else is deleted.
 // Requires web/.env.local with FISH_AUDIO_API_KEY, FISH_AUDIO_VOICE_ID (optional),
 // FISH_AUDIO_MODEL (optional), and BLOB_READ_WRITE_TOKEN.
 
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
-const { head, put } = require('@vercel/blob');
+const { list, put, del } = require('@vercel/blob');
+const { CACHE_PREFIX, cachePathname, synthesize, fishConfig } = require('../lib/tts-audio');
 
 // --- load web/.env.local into process.env (no dotenv dependency needed for a one-off script) ---
 const envPath = path.join(__dirname, '..', '.env.local');
@@ -21,21 +24,9 @@ for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
   if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
 }
 
-const API_KEY = process.env.FISH_AUDIO_API_KEY;
-const REFERENCE_ID = process.env.FISH_AUDIO_VOICE_ID || '76bb6ae7b26c41fbbd484514fdb014c2';
-const MODEL = process.env.FISH_AUDIO_MODEL || 's2.1-pro-free';
-if (!API_KEY) throw new Error('FISH_AUDIO_API_KEY missing from web/.env.local');
+const FISH = fishConfig();
+if (!FISH.apiKey) throw new Error('FISH_AUDIO_API_KEY missing from web/.env.local');
 if (!process.env.BLOB_READ_WRITE_TOKEN) throw new Error('BLOB_READ_WRITE_TOKEN missing from web/.env.local');
-
-// Mirrors the cap in web/api/tts.js exactly, so pre-generated audio matches what live
-// generation would produce for the same input.
-const MAX_NARRATION_CHARS = 4000;
-function capNarration(text) {
-  if (text.length <= MAX_NARRATION_CHARS) return text;
-  const cut = text.lastIndexOf('. ', MAX_NARRATION_CHARS);
-  const end = cut > MAX_NARRATION_CHARS * 0.5 ? cut + 1 : MAX_NARRATION_CHARS;
-  return `${text.slice(0, end)} The full text continues above.`;
-}
 
 // Mirrors web/js/app.js's descBlocks/plainDesc. Kept as a manual copy (pure string logic, low
 // drift risk) rather than a shared module, since drift here only affects narration wording --
@@ -69,28 +60,23 @@ const SYS_BLURB = {
   reference: 'Reference lines and movements are the anatomical planes, directional terms, and joint movements — like flexion, extension, and rotation — used to describe position and motion throughout this atlas.',
 };
 
-const cacheKeyFor = (id) => crypto.createHash('sha1').update(id).digest('hex');
-
-async function alreadyCached(pathname) {
-  try { return !!(await head(pathname)); } catch { return false; }
+async function listAll(prefix) {
+  const blobs = [];
+  let cursor;
+  do {
+    const page = await list({ prefix, cursor, limit: 1000 });
+    blobs.push(...page.blobs);
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+  return blobs;
 }
 
-async function synthesize(text) {
-  const res = await fetch('https://api.fish.audio/v1/tts', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${API_KEY}`, 'Content-Type': 'application/json', model: MODEL },
-    body: JSON.stringify({ text: capNarration(text), reference_id: REFERENCE_ID, format: 'mp3' }),
-  });
-  if (!res.ok) { const detail = await res.text().catch(() => ''); throw new Error(`fish audio ${res.status}: ${detail.slice(0, 200)}`); }
-  return Buffer.from(await res.arrayBuffer());
-}
-
-async function warmOne(id, text, stats) {
-  const pathname = `tts/${cacheKeyFor(id)}.mp3`;
-  if (await alreadyCached(pathname)) { stats.skipped++; return; }
+async function warmOne(id, text, stats, cached) {
+  const pathname = cachePathname(id);
+  if (cached.has(pathname)) { stats.skipped++; return; }
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const audio = await synthesize(text);
+      const audio = await synthesize(text, FISH);
       await put(pathname, audio, { access: 'public', addRandomSuffix: false, allowOverwrite: true, contentType: 'audio/mpeg' });
       stats.generated++;
       return;
@@ -130,13 +116,21 @@ async function main() {
   const limit = limitArg ? parseInt(limitArg.split('=')[1], 10) : jobs.length;
   const toRun = jobs.slice(0, limit);
 
-  console.log(`Warming ${toRun.length} of ${jobs.length} entries (model=${MODEL}, voice=${REFERENCE_ID})...`);
+  if (process.argv.includes('--prune')) {
+    const stale = (await listAll('tts/')).filter((b) => !b.pathname.startsWith(CACHE_PREFIX));
+    const mb = (stale.reduce((n, b) => n + b.size, 0) / 1e6).toFixed(1);
+    for (let i = 0; i < stale.length; i += 500) await del(stale.slice(i, i + 500).map((b) => b.url));
+    console.log(`Pruned ${stale.length} old-format blobs (${mb} MB) outside ${CACHE_PREFIX}`);
+  }
+  const cached = new Set((await listAll(CACHE_PREFIX)).map((b) => b.pathname));
+
+  console.log(`Warming ${toRun.length} of ${jobs.length} entries (model=${FISH.model}, voice=${FISH.referenceId}, ${cached.size} already cached)...`);
   const stats = { generated: 0, skipped: 0, failed: 0, failures: [] };
   let done = 0;
   const started = Date.now();
   const concurrency = parseInt((process.argv.find((a) => a.startsWith('--concurrency=')) || '').split('=')[1], 10) || 8;
   await pool(toRun, async (job) => {
-    await warmOne(job.id, job.text, stats);
+    await warmOne(job.id, job.text, stats, cached);
     done++;
     if (done % 25 === 0 || done === toRun.length) {
       const elapsed = ((Date.now() - started) / 1000).toFixed(0);

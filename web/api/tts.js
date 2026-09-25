@@ -2,36 +2,25 @@
 // and caches the result in Vercel Blob so the same structure/group/category is only ever
 // synthesized once. Requires FISH_AUDIO_API_KEY (and optionally FISH_AUDIO_VOICE_ID /
 // FISH_AUDIO_MODEL) plus BLOB_READ_WRITE_TOKEN (added automatically when the project's Blob
-// store is connected). See web/.env.example.
-const crypto = require('crypto');
+// store is connected). See web/.env.example and lib/tts-audio.js for the audio format.
+//
+// The browser reads cached audio straight from the public Blob URL first (ATLAS_CONFIG.ttsBase),
+// so this function — and its head() call, which counts against the Hobby plan's advanced-operation
+// quota — only runs on a cache miss.
 const { head, put } = require('@vercel/blob');
-
-// Some Wikipedia-derived descriptions run past 20k characters — tens of minutes of narration
-// nobody is going to sit through, and slow enough to synthesize that it blows past any
-// reasonable function timeout. Cap what's actually spoken; the full text still reads fine on
-// the page. Cut at the last sentence boundary before the cap rather than mid-word.
-const MAX_NARRATION_CHARS = 4000;
-function capNarration(text) {
-  if (text.length <= MAX_NARRATION_CHARS) return text;
-  const cut = text.lastIndexOf('. ', MAX_NARRATION_CHARS);
-  const end = cut > MAX_NARRATION_CHARS * 0.5 ? cut + 1 : MAX_NARRATION_CHARS;
-  return `${text.slice(0, end)} The full text continues above.`;
-}
+const { cachePathname, synthesize, fishConfig } = require('../lib/tts-audio');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
 
-  const apiKey = process.env.FISH_AUDIO_API_KEY;
-  if (!apiKey) { res.status(500).json({ error: 'FISH_AUDIO_API_KEY is not configured' }); return; }
+  const fish = fishConfig();
+  if (!fish.apiKey) { res.status(500).json({ error: 'FISH_AUDIO_API_KEY is not configured' }); return; }
 
   const text = req.body && req.body.text;
   if (!text || typeof text !== 'string') { res.status(400).json({ error: 'Missing "text"' }); return; }
   const id = req.body && typeof req.body.id === 'string' ? req.body.id : null;
 
-  // A stable id (e.g. "skeletal:Humerus") caches per-structure regardless of incidental text
-  // changes; without one (e.g. the ad-hoc "currently selected" readout) we cache by exact text.
-  const cacheKey = crypto.createHash('sha1').update(id || text).digest('hex');
-  const pathname = `tts/${cacheKey}.mp3`;
+  const pathname = cachePathname(id || text);
 
   try {
     const cached = await head(pathname);
@@ -40,32 +29,14 @@ module.exports = async function handler(req, res) {
     // Not found in cache (BlobNotFoundError) — fall through and generate it.
   }
 
-  const referenceId = process.env.FISH_AUDIO_VOICE_ID || '76bb6ae7b26c41fbbd484514fdb014c2';
-  const model = process.env.FISH_AUDIO_MODEL || 's2.1-pro-free';
-
-  let upstream;
+  let audio;
   try {
-    upstream = await fetch('https://api.fish.audio/v1/tts', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        model,
-      },
-      body: JSON.stringify({ text: capNarration(text), reference_id: referenceId, format: 'mp3' }),
-    });
+    audio = await synthesize(text, fish);
   } catch (err) {
-    res.status(502).json({ error: 'Failed to reach Fish Audio' });
+    if (err.status) res.status(err.status).json({ error: 'Fish Audio TTS failed', detail: err.detail });
+    else res.status(502).json({ error: 'Failed to reach Fish Audio' });
     return;
   }
-
-  if (!upstream.ok) {
-    const detail = await upstream.text().catch(() => '');
-    res.status(upstream.status).json({ error: 'Fish Audio TTS failed', detail });
-    return;
-  }
-
-  const audio = Buffer.from(await upstream.arrayBuffer());
 
   // Awaited so the cache is actually populated before the function's execution context is
   // frozen post-response; caching is still best-effort — a failed write doesn't fail the reply.

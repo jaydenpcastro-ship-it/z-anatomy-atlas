@@ -14,6 +14,7 @@ NOT_A_MUSCLE = re.compile(r"bursa|retinaculum|sheath|aponeurosis|tendon|fascia|s
 
 manifest = json.load(io.open(os.path.join(ROOT, "web", "data", "manifest.json"), encoding="utf-8"))
 vocab = json.load(io.open(os.path.join(ROOT, "web", "data", "vocab.json"), encoding="utf-8"))
+motions = json.load(io.open(os.path.join(ROOT, "web", "data", "motions.json"), encoding="utf-8"))
 names = {r["name"] for r in manifest["structures"] if r["system"] == "muscular"}
 errors, out = [], {}
 
@@ -41,6 +42,8 @@ for n, raw in enumerate(io.open(SRC, encoding="utf-8"), 1):
         errors.append(f"line {n}: name not in manifest: {name!r}")
     rec = {"o": split(o), "i": split(i), "a": split(a), "n": nerve}
     for act in [x.strip() for x in acts.split(",") if x.strip()]:
+        # optional "@site+site" limits the animation to those digit sites (e.g. @mcp1 = thumb MCP only)
+        act, _, sites = act.partition("@")
         try:
             j, m, role = act.split(".")
         except ValueError:
@@ -48,7 +51,16 @@ for n, raw in enumerate(io.open(SRC, encoding="utf-8"), 1):
         if j not in vocab["joints"] or m not in vocab["joints"][j]["movements"] or role not in "PA":
             errors.append(f"line {n}: {name}: act {act!r} is not in vocab.json")
             continue
-        rec.setdefault("acts", []).append([j, m, role])
+        entry = [j, m, role]
+        if sites:
+            sites = sites.split("+")
+            known = {o[0] for o in motions["joints"].get(j, {}).get("moves", {}).get(m, {}).get("ops", [])}
+            bad = [x for x in sites if x not in known]
+            if bad:
+                errors.append(f"line {n}: {name}: sites {bad} are not ops of {j}.{m} in motions.json")
+                continue
+            entry.append(sites)
+        rec.setdefault("acts", []).append(entry)
     for k in "oia":
         if not rec[k]:
             errors.append(f"line {n}: {name}: empty {k}")

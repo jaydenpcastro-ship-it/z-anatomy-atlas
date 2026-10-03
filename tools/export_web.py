@@ -261,4 +261,6 @@ with open(os.path.join(OUT, "data", "manifest.json"), "w", encoding="utf-8") as 
     json.dump(manifest, f, ensure_ascii=False, separators=(",", ":"))
 log("manifest:", len(manifest["structures"]), "structures,", len(manifest["landmarks"]), "landmarks,",
     len(manifest["groups"]), "groups,", os.path.getsize(os.path.join(OUT, "data", "manifest.json")) // 1024, "KB")
+import postprocess_knowledge  # cleans the descriptions and merges tools/desc_supplement.json + desc_handwritten.json
+postprocess_knowledge.main(OUT)
 print("EXPORT_DONE")

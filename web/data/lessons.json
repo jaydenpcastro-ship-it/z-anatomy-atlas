@@ -1,0 +1,661 @@
+{
+ "_about": "Guided lessons for js/lessons.js. Each step sets up the scene and explains it. Step fields: systems (shown, others hidden), select (structure names, or 'group:<system>:<group id>'), side ('l'/'r': only that side), view (front/back/left/right/top, or a direction [x,y,z] in the web frame: +X body's left, +Y up, +Z front), ghost, iso, cut ({axis: x|y|z, pos: 0-1, flip}), motion ({joint, movement, muscle?}), zoom (multiplies the framing radius). Text is written for the atlas from standard anatomy; keep it short and checkable. Every name is validated by tools/browser/t_lessons.mjs.",
+ "lessons": [
+  {
+   "id": "shoulder",
+   "title": "The shoulder and rotator cuff",
+   "region": "Upper limb",
+   "minutes": 6,
+   "summary": "How the most mobile joint in the body is held together: the bones, the shallow glenohumeral joint, and the four rotator cuff muscles.",
+   "steps": [
+    {
+     "title": "Three bones meet",
+     "systems": [
+      "skeletal"
+     ],
+     "select": [
+      "Clavicle",
+      "Scapula",
+      "Humerus"
+     ],
+     "side": "l",
+     "view": "front",
+     "ghost": true,
+     "text": "The shoulder is built from the clavicle, the scapula and the humerus. The clavicle is the only bony link between the upper limb and the trunk: it acts as a strut that keeps the shoulder out to the side."
+    },
+    {
+     "title": "A golf ball on a tee",
+     "systems": [
+      "skeletal",
+      "joints"
+     ],
+     "select": [
+      "Articular capsule of glenohumeral joint",
+      "Superior glenohumeral ligament",
+      "Middle glenohumeral ligament",
+      "Inferior glenohumeral ligament",
+      "Coracohumeral ligament"
+     ],
+     "side": "l",
+     "view": [
+      0.7,
+      0.2,
+      0.7
+     ],
+     "ghost": true,
+     "zoom": 1.6,
+     "text": "The large head of the humerus sits against the small, shallow glenoid cavity of the scapula. This gives a huge range of movement but little bony stability. The loose capsule and the glenohumeral ligaments add some support, but the joint relies mainly on muscles."
+    },
+    {
+     "title": "The rotator cuff",
+     "systems": [
+      "skeletal",
+      "muscular"
+     ],
+     "select": [
+      "group:muscular:Rotator cuff muscles.g"
+     ],
+     "side": "l",
+     "view": "back",
+     "ghost": true,
+     "text": "Four muscles from the scapula wrap the head of the humerus and press it into the glenoid: supraspinatus, infraspinatus, teres minor and subscapularis (SITS). Their tendons blend with the capsule to form the rotator cuff."
+    },
+    {
+     "title": "Supraspinatus starts abduction",
+     "systems": [
+      "skeletal",
+      "muscular"
+     ],
+     "select": [
+      "Supraspinatus muscle"
+     ],
+     "side": "l",
+     "view": "back",
+     "ghost": true,
+     "motion": {
+      "joint": "glenohumeral",
+      "movement": "abduction",
+      "muscle": "Supraspinatus muscle"
+     },
+     "text": "Supraspinatus runs under the acromion to the top of the greater tubercle. It starts abduction of the arm, after which the deltoid takes over. Its tendon passes through a narrow space under the acromion, so it is the cuff tendon most often inflamed or torn."
+    },
+    {
+     "title": "Rotators front and back",
+     "systems": [
+      "skeletal",
+      "muscular"
+     ],
+     "select": [
+      "Infraspinatus muscle",
+      "Teres minor muscle",
+      "Subscapularis muscle"
+     ],
+     "side": "l",
+     "view": [
+      0.9,
+      0.1,
+      0.4
+     ],
+     "ghost": true,
+     "text": "Infraspinatus and teres minor, behind, rotate the arm laterally. Subscapularis, on the front of the scapula, is the main medial rotator. Together the cuff keeps the humeral head centred whatever the arm is doing."
+    },
+    {
+     "title": "Deltoid and the axillary nerve",
+     "systems": [
+      "skeletal",
+      "muscular",
+      "nervous"
+     ],
+     "select": [
+      "Acromial part of deltoid muscle",
+      "Clavicular part of deltoid muscle",
+      "Scapular spinal part of deltoid muscle",
+      "Axillary nerve"
+     ],
+     "side": "l",
+     "view": [
+      0.9,
+      0.1,
+      -0.3
+     ],
+     "ghost": true,
+     "text": "The deltoid caps the shoulder and is the main abductor once the movement has started. It is supplied by the axillary nerve, which winds around the surgical neck of the humerus. A fracture there or a dislocated shoulder can injure it: weak abduction and numbness over the lower deltoid."
+    }
+   ],
+   "quiz": {
+    "section": "muscular",
+    "mode": "identify",
+    "group": "Scapulohumeral muscles.g",
+    "level": "all"
+   }
+  },
+  {
+   "id": "brachial-plexus",
+   "title": "Nerves of the upper limb",
+   "region": "Upper limb",
+   "minutes": 6,
+   "summary": "From the brachial plexus to the five terminal nerves of the arm, with the classic injuries each one causes.",
+   "steps": [
+    {
+     "title": "The brachial plexus",
+     "systems": [
+      "skeletal",
+      "nervous"
+     ],
+     "select": [
+      "group:nervous:Supraclavicular part of brachial plexus.g"
+     ],
+     "side": "l",
+     "view": "front",
+     "ghost": true,
+     "zoom": 1.4,
+     "text": "The anterior rami of C5 to T1 join to form the brachial plexus. Roots unite into trunks above the clavicle, split into divisions behind it, and regroup as cords around the axillary artery. Its five big terminal branches supply the whole upper limb."
+    },
+    {
+     "title": "Musculocutaneous nerve",
+     "systems": [
+      "skeletal",
+      "muscular",
+      "nervous"
+     ],
+     "select": [
+      "Musculocutaneous nerve",
+      "Long head of biceps brachii",
+      "Short head of biceps brachii",
+      "Brachialis muscle",
+      "Coracobrachialis muscle"
+     ],
+     "side": "l",
+     "view": "front",
+     "ghost": true,
+     "text": "From the lateral cord, the musculocutaneous nerve pierces coracobrachialis and supplies the flexors of the arm: coracobrachialis, biceps and brachialis. It ends as the skin nerve of the lateral forearm."
+    },
+    {
+     "title": "Radial nerve",
+     "systems": [
+      "skeletal",
+      "nervous"
+     ],
+     "select": [
+      "Radial nerve",
+      "Humerus"
+     ],
+     "side": "l",
+     "view": "back",
+     "ghost": true,
+     "text": "The radial nerve, from the posterior cord, supplies every extensor of the arm and forearm. It spirals around the back of the humerus in the radial groove, so a fracture of the shaft can damage it, causing wrist drop."
+    },
+    {
+     "title": "Median nerve",
+     "systems": [
+      "skeletal",
+      "nervous"
+     ],
+     "select": [
+      "Median nerve"
+     ],
+     "side": "l",
+     "view": "front",
+     "ghost": true,
+     "text": "The median nerve supplies most forearm flexors and the thenar muscles of the thumb. At the wrist it passes through the carpal tunnel, where compression causes carpal tunnel syndrome: numb lateral fingers and, later, a wasted thenar eminence."
+    },
+    {
+     "title": "Ulnar nerve",
+     "systems": [
+      "skeletal",
+      "nervous"
+     ],
+     "select": [
+      "Ulnar nerve",
+      "Deep branch of ulnar nerve"
+     ],
+     "side": "l",
+     "view": [
+      0.2,
+      0,
+      1
+     ],
+     "ghost": true,
+     "text": "The ulnar nerve passes behind the medial epicondyle, where knocking it gives the 'funny bone' tingle. It supplies most small muscles of the hand, so injury leads to weak finger spreading and a claw-like ring and little finger."
+    }
+   ],
+   "quiz": {
+    "section": "nervous",
+    "mode": "identify",
+    "group": "Brachial plexus.g",
+    "level": "all"
+   }
+  },
+  {
+   "id": "knee",
+   "title": "The knee",
+   "region": "Lower limb",
+   "minutes": 6,
+   "summary": "Bones, menisci and the four main ligaments of the knee, and the muscles that move it.",
+   "steps": [
+    {
+     "title": "Bones of the knee",
+     "systems": [
+      "skeletal"
+     ],
+     "select": [
+      "Femur",
+      "Tibia",
+      "Patella",
+      "Fibula"
+     ],
+     "side": "l",
+     "view": "front",
+     "ghost": true,
+     "text": "The rounded condyles of the femur roll and glide on the flat top of the tibia. The patella sits in the quadriceps tendon in front of the joint. The fibula does not take part in the knee joint itself."
+    },
+    {
+     "title": "The menisci",
+     "systems": [
+      "skeletal",
+      "joints"
+     ],
+     "select": [
+      "Medial meniscus",
+      "Lateral meniscus"
+     ],
+     "side": "l",
+     "view": [
+      0.1,
+      1,
+      0.3
+     ],
+     "ghost": true,
+     "zoom": 1.2,
+     "text": "Two C-shaped wedges of fibrocartilage deepen the tibial surface and spread the load. The medial meniscus is attached to the tibial collateral ligament and moves less, which is one reason it tears more often."
+    },
+    {
+     "title": "Cruciate ligaments",
+     "systems": [
+      "skeletal",
+      "joints"
+     ],
+     "select": [
+      "Anterior cruciate ligament",
+      "Posterior cruciate ligament"
+     ],
+     "side": "l",
+     "view": [
+      0.6,
+      0,
+      0.8
+     ],
+     "ghost": true,
+     "cut": {
+      "axis": "z",
+      "pos": 0.465
+     },
+     "zoom": 1.2,
+     "text": "Inside the joint, the cruciate ligaments cross like an X. The anterior cruciate ligament stops the tibia sliding forward on the femur and is commonly torn in twisting sports injuries; the posterior cruciate stops it sliding backward."
+    },
+    {
+     "title": "Collateral ligaments",
+     "systems": [
+      "skeletal",
+      "joints"
+     ],
+     "select": [
+      "Superficial part of tibial collateral ligament",
+      "Deep part of tibial collateral ligament",
+      "Fibular collateral ligament"
+     ],
+     "side": "l",
+     "view": "front",
+     "ghost": true,
+     "text": "The tibial (medial) and fibular (lateral) collateral ligaments resist sideways bending. The broad tibial collateral ligament is often injured by a blow to the outside of the knee, sometimes together with the medial meniscus and the ACL."
+    },
+    {
+     "title": "Muscles that move the knee",
+     "systems": [
+      "skeletal",
+      "muscular"
+     ],
+     "select": [
+      "group:muscular:Anterior compartment of thigh.g",
+      "group:muscular:Posterior compartment of thigh.g"
+     ],
+     "side": "l",
+     "view": [
+      1,
+      0.1,
+      0.2
+     ],
+     "ghost": true,
+     "motion": {
+      "joint": "knee",
+      "movement": "flexion"
+     },
+     "text": "The quadriceps in front extends the knee; the hamstrings behind flex it. In the last degrees of extension the femur rotates slightly on the tibia and 'locks' the knee; the popliteus unlocks it to start flexion."
+    }
+   ],
+   "quiz": {
+    "section": "joints",
+    "mode": "identify",
+    "group": "Knee joint.g",
+    "level": "all"
+   }
+  },
+  {
+   "id": "heart",
+   "title": "The heart and great vessels",
+   "region": "Thorax",
+   "minutes": 6,
+   "summary": "Chambers, valves and coronary arteries, and the great vessels that leave and enter the heart.",
+   "steps": [
+    {
+     "title": "Four chambers",
+     "systems": [
+      "skeletal",
+      "cardiovascular"
+     ],
+     "select": [
+      "Right atrium",
+      "Right ventricle",
+      "Left atrium",
+      "Left ventricle"
+     ],
+     "view": "front",
+     "ghost": true,
+     "text": "The heart is two pumps side by side. The right atrium and ventricle send blood to the lungs; the left atrium and ventricle send it around the body. Most of the front of the heart is formed by the right ventricle; the left ventricle forms the apex."
+    },
+    {
+     "title": "Inside the heart",
+     "systems": [
+      "cardiovascular"
+     ],
+     "select": [
+      "Right ventricle",
+      "Left ventricle",
+      "Anterior papillary muscle of right ventricle",
+      "Inferior papillary muscle of left ventricle"
+     ],
+     "view": "front",
+     "ghost": false,
+     "cut": {
+      "axis": "z",
+      "pos": 0.545
+     },
+     "zoom": 0.9,
+     "text": "A coronal cut opens the ventricles. The left ventricle has a much thicker wall because it pumps against the high pressure of the systemic circulation. Papillary muscles anchor the valve leaflets through tendinous cords."
+    },
+    {
+     "title": "The valves",
+     "systems": [
+      "cardiovascular"
+     ],
+     "select": [
+      "group:cardiovascular:Valvular complex of heart.g"
+     ],
+     "view": [
+      0,
+      1,
+      0.6
+     ],
+     "ghost": true,
+     "zoom": 0.8,
+     "text": "Four valves keep blood moving one way: the tricuspid and mitral valves between atria and ventricles, and the pulmonary and aortic valves at the exits. The 'lub-dub' heart sounds are the closing of the atrioventricular valves, then the semilunar valves."
+    },
+    {
+     "title": "Coronary arteries",
+     "systems": [
+      "cardiovascular"
+     ],
+     "select": [
+      "Right coronary artery",
+      "Left coronary artery",
+      "Anterior interventricular artery",
+      "Circumflex artery of heart"
+     ],
+     "view": "front",
+     "ghost": true,
+     "text": "The heart muscle is fed by the right and left coronary arteries, the first branches of the aorta. The anterior interventricular branch of the left coronary artery is the one most often blocked in a heart attack."
+    },
+    {
+     "title": "Great vessels",
+     "systems": [
+      "skeletal",
+      "cardiovascular"
+     ],
+     "select": [
+      "Ascending aorta",
+      "Aortic arch",
+      "Pulmonary trunk",
+      "Superior vena cava",
+      "Inferior vena cava (thoracic part)"
+     ],
+     "view": "front",
+     "ghost": true,
+     "text": "The aorta rises from the left ventricle and arches over the left lung root; the pulmonary trunk leaves the right ventricle and divides under the arch. The superior and inferior venae cavae return blood to the right atrium."
+    }
+   ],
+   "quiz": {
+    "section": "cardiovascular",
+    "mode": "identify",
+    "group": "Heart.g",
+    "level": "all"
+   }
+  },
+  {
+   "id": "trunk-sections",
+   "title": "Reading cross-sections of the trunk",
+   "region": "Thorax and abdomen",
+   "minutes": 5,
+   "summary": "Move a transverse plane down the trunk, the way CT scans are read, and learn what lies at each level.",
+   "steps": [
+    {
+     "title": "How sections are viewed",
+     "systems": [
+      "skeletal",
+      "visceral",
+      "cardiovascular"
+     ],
+     "select": [],
+     "view": "top",
+     "cut": {
+      "axis": "y",
+      "pos": 0.8
+     },
+     "text": "Clinical CT and MRI slices are transverse sections, conventionally viewed from the feet, so the patient's left appears on the right of the screen. Here you look from above. Drag the cross-section slider to move through the body yourself.",
+     "ghost": false
+    },
+    {
+     "title": "Upper thorax",
+     "systems": [
+      "skeletal",
+      "visceral",
+      "cardiovascular"
+     ],
+     "select": [
+      "Trachea",
+      "Oesophagus",
+      "Aortic arch",
+      "Superior vena cava"
+     ],
+     "view": "top",
+     "cut": {
+      "axis": "y",
+      "pos": 0.79
+     },
+     "ghost": false,
+     "text": "Above the heart, the trachea lies in front of the oesophagus, with the arch of the aorta curving over them on the left and the superior vena cava on the right."
+    },
+    {
+     "title": "Heart level",
+     "systems": [
+      "skeletal",
+      "visceral",
+      "cardiovascular"
+     ],
+     "select": [
+      "Right ventricle",
+      "Left ventricle",
+      "Left atrium",
+      "Oesophagus"
+     ],
+     "view": "top",
+     "cut": {
+      "axis": "y",
+      "pos": 0.745
+     },
+     "ghost": false,
+     "text": "Lower down, the section cuts through the heart. The left atrium is the most posterior chamber and lies directly in front of the oesophagus, which is why an enlarged left atrium can press on it."
+    },
+    {
+     "title": "Upper abdomen",
+     "systems": [
+      "skeletal",
+      "visceral",
+      "cardiovascular"
+     ],
+     "select": [
+      "Liver",
+      "Stomach",
+      "Abdominal aorta",
+      "Inferior vena cava (abdominal part)"
+     ],
+     "view": "top",
+     "cut": {
+      "axis": "y",
+      "pos": 0.675
+     },
+     "ghost": false,
+     "text": "Below the diaphragm, the liver fills the right upper abdomen and the stomach lies on the left. The aorta sits just in front of the vertebral bodies, slightly to the left; the inferior vena cava lies to its right."
+    },
+    {
+     "title": "Kidney level",
+     "systems": [
+      "skeletal",
+      "visceral",
+      "cardiovascular"
+     ],
+     "select": [
+      "Kidney",
+      "Pancreas",
+      "Abdominal aorta"
+     ],
+     "view": "top",
+     "cut": {
+      "axis": "y",
+      "pos": 0.648
+     },
+     "ghost": false,
+     "text": "The kidneys lie against the posterior abdominal wall on either side of the vertebral column, the right usually a little lower because of the liver. The pancreas crosses in front of the aorta at about the level of L1–L2."
+    }
+   ],
+   "quiz": {
+    "section": "visceral",
+    "mode": "identify",
+    "group": "",
+    "level": "major"
+   }
+  },
+  {
+   "id": "cranial-nerves",
+   "title": "The twelve cranial nerves",
+   "region": "Head and neck",
+   "minutes": 6,
+   "summary": "What each cranial nerve does, where it leaves the brain, and how its injury shows.",
+   "steps": [
+    {
+     "title": "Twelve pairs",
+     "systems": [
+      "nervous"
+     ],
+     "select": [
+      "group:nervous:Cranial nerves.g"
+     ],
+     "view": [
+      0,
+      -0.6,
+      1
+     ],
+     "ghost": true,
+     "text": "Twelve pairs of cranial nerves leave the brain and brainstem and pass through openings in the skull. They are numbered I to XII from front to back. Some are purely sensory, some purely motor, and some mixed."
+    },
+    {
+     "title": "I and II: smell and sight",
+     "systems": [
+      "nervous"
+     ],
+     "select": [
+      "Olfactory nerve (I)",
+      "Optic nerve (II)"
+     ],
+     "view": [
+      0,
+      -0.4,
+      1
+     ],
+     "ghost": true,
+     "text": "The olfactory nerve carries smell through the cribriform plate. The optic nerve carries vision to the optic chiasma, where fibres from the inner halves of each retina cross: a pituitary tumour pressing there causes loss of both outer visual fields."
+    },
+    {
+     "title": "III, IV and VI: moving the eye",
+     "systems": [
+      "nervous",
+      "muscular"
+     ],
+     "select": [
+      "Oculomotor nerve (III)",
+      "Trochlear nerve (IV)",
+      "Abducens nerve (VI)"
+     ],
+     "view": [
+      0.6,
+      0,
+      1
+     ],
+     "ghost": true,
+     "zoom": 1.4,
+     "text": "Three nerves move the eye. The trochlear nerve supplies superior oblique and the abducens nerve lateral rectus; the oculomotor supplies all the others, lifts the eyelid and constricts the pupil. A third-nerve palsy leaves the eye 'down and out' with a drooping lid."
+    },
+    {
+     "title": "V and VII: the face",
+     "systems": [
+      "nervous"
+     ],
+     "select": [
+      "Trigeminal nerve (V)",
+      "Ophthalmic nerve",
+      "Maxillary nerve",
+      "Facial nerve (VII)"
+     ],
+     "view": "left",
+     "ghost": true,
+     "text": "The trigeminal nerve carries sensation from the face in three divisions and moves the jaw muscles. The facial nerve moves the muscles of facial expression: in Bell's palsy one whole side of the face, including the forehead, droops."
+    },
+    {
+     "title": "VIII to XII",
+     "systems": [
+      "nervous"
+     ],
+     "select": [
+      "Vestibulocochlear nerve (VIII)",
+      "Glossopharyngeal nerve (IX)",
+      "Vagus nerve (X)",
+      "Accessory nerve (XI)",
+      "Hypoglossal nerve (XII)"
+     ],
+     "view": [
+      1,
+      -0.2,
+      0.3
+     ],
+     "ghost": true,
+     "text": "VIII serves hearing and balance. IX and X supply the pharynx and larynx; the vagus also runs down to the thoracic and abdominal organs. XI moves sternocleidomastoid and trapezius, and XII the tongue, which deviates towards the side of a damaged hypoglossal nerve."
+    }
+   ],
+   "quiz": {
+    "section": "nervous",
+    "mode": "identify",
+    "group": "Cranial nerves.g",
+    "level": "all"
+   }
+  }
+ ]
+}

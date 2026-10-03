@@ -71,6 +71,7 @@ const S = {
   sys: new Map(),  // key -> { group, loaded, loading, visible, progress }
   meshes: new Map(), // id -> Mesh[]
   sel: new Set(), cur: null, curLm: null, ghost: false, iso: false, pins: false, tab: null,
+  clipPlane: null,        // THREE.Plane while a cross-section is shown (section.js): picking ignores the cut-away side
   desc: new Map(),
   wholes: new Map(),      // `${system}|${muscle}` -> every head/part record of a muscle whose parts are separate structures
 };
@@ -168,7 +169,10 @@ function restyle() {
   $('#ghostBtn').setAttribute('aria-pressed', S.ghost);
   $('#isoBtn').setAttribute('aria-pressed', S.iso);
   dirty = true;
+  // ghost / isolate are part of the shareable link; never while studying (the quiz highlights its answer through S.sel)
+  if (S.M && (S.ghost !== savedGI[0] || S.iso !== savedGI[1]) && !atlas.quiz?.isOpen?.()) { savedGI = [S.ghost, S.iso]; saveHash(); }
 }
+let savedGI = [false, false];
 
 // ------------------------------------------------------------ system loading -
 function sysState(k) {
@@ -312,6 +316,7 @@ function pickAt(e, forHover, { additive = false } = {}) {
   // Ghost mode normally excludes faded structures from picking so a mis-click can't grab the background; an
   // additive (ctrl/shift) click means the user wants exactly one of those faded structures, so it stays pickable.
   const hits = ray.intersectObjects(roots, true).filter((h) => h.object.isMesh && h.object.visible &&
+    (!S.clipPlane || S.clipPlane.distanceToPoint(h.point) >= 0) &&
     (additive || !(S.sel.size && S.ghost && !S.sel.has(h.object.userData.zid))));
   if (forHover && performance.now() - t0 > 70) hoverOk = false; // raycast too slow on this machine: hover off, click still works
   const rec = hits.length ? S.byId.get(hits[0].object.userData.zid) : null;
@@ -1042,6 +1047,7 @@ function descBlocks(text, title) {
     if ((m = b.match(/^===\s*(.+?)\s*===$/))) out.push({ t: 'h5', text: m[1] });
     else if ((m = b.match(/^==\s*(.+?)\s*==$/))) out.push({ t: 'h4', text: m[1] });
     else if (b.toLowerCase() === (title || '').toLowerCase() || /^[A-Z0-9 ,()'’\-/&]+(\s\((MUSCLE|BONE)\))?$/.test(b) && b.length < 70) continue;
+    else if (b.startsWith('Z-Anatomy Atlas note')) continue;   // source line of the atlas's own texts, shown as the attribution instead
     else out.push({ t: 'p', text: b });
   }
   return out;
@@ -1087,7 +1093,8 @@ function extractFacts(text) {
     a: pick(/\b(flexes|extends|abducts|adducts|rotates|elevates|depresses|function|action|moves|draws|pulls|tenses|acts)\b/i),
     n: pick(/\b(innervated|innervation|nerve supply|supplied by|nerve)\b/i), auto: true };
 }
-const FACT_ROWS = [['o', 'O', 'Origin'], ['i', 'I', 'Insertion'], ['a', 'A', 'Action'], ['n', 'N', 'Nerve']];
+const FACT_ROWS = [['o', 'O', 'Origin'], ['i', 'I', 'Insertion'], ['a', 'A', 'Action'], ['n', 'N', 'Innervation']];
+const FACT_EXTRAS = [];   // fn(sib, host, ctx) appended under the facts card (knowledge.js adds nerve / blood supply)
 function renderFacts(sib, host, ctx) {
   const rec = sib[0];
   host.replaceChildren(el('p', { className: 'fine' }, 'Loading…'));
@@ -1102,6 +1109,7 @@ function renderFacts(sib, host, ctx) {
         el('dd', {}, v.length ? v.map((x) => el('span', { className: 'fv' }, x)) : el('span', { className: 'none' }, 'Not listed'))));
     }
     host.replaceChildren(card);
+    for (const fn of FACT_EXTRAS) fn(sib, host, ctx);
     const acts = f.acts || [];
     if (acts.length) {
       host.append(el('h3', {}, 'Moves the body at'));
@@ -1148,8 +1156,11 @@ function renderText(sib, host, ctx) {
   descFor(rec.system).then((d) => {
     if (!ctx.isCurrent()) return;
     const t = d[rec.name];
-    holder.replaceChildren(el('h3', {}, 'Description'), t ? fmtDesc(t, rec.name) : el('p', { className: 'fine' }, 'No description available for this structure.'),
-      t ? el('p', { className: 'fine' }, 'Text: Wikipedia, CC BY-SA.') : null);
+    // descriptions are Wikipedia text (CC BY-SA) unless they end with the atlas's own note (tools/desc_handwritten.json)
+    const own = t && /Z-Anatomy Atlas note[^\n]*$/.test(t.trim());
+    holder.replaceChildren(el('h3', {}, t ? 'Description' : 'Summary'),
+      t ? fmtDesc(t, rec.name) : (atlas.describe?.(rec) || el('p', { className: 'fine' }, 'No description available for this structure.')),
+      t ? el('p', { className: 'fine' }, own ? 'Text: Z-Anatomy Atlas, CC BY-SA.' : 'Text: Wikipedia, CC BY-SA.') : '');
   });
 }
 registerTab({ id: 'facts', label: 'Facts', order: 10, applies: (sib) => isMuscle(sib[0]), render: renderFacts });
@@ -1443,9 +1454,14 @@ function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTi
 function fillSelect(sel, opts) { sel.replaceChildren(...opts.map(([v, l]) => el('option', { value: v }, l))); }
 
 // ------------------------------------------------------------- url state ----
+// Modules add their own state to the link with atlas.registerHashPart({ key, get() -> string|'', set(value) }).
+const hashParts = [];
 function saveHash() {
   const vis = [...S.sys].filter(([, s]) => s.visible).map(([k]) => k).join(',');
-  const p = new URLSearchParams(); if (vis) p.set('s', vis); if (S.sel.size) p.set('sel', [...S.sel].join(',')); if (S.lang !== 'en') p.set('lang', S.lang);
+  const p = new URLSearchParams(); if (vis) p.set('s', vis); if (S.lang !== 'en') p.set('lang', S.lang);
+  if (S.sel.size && !atlas.quiz?.isOpen?.()) p.set('sel', [...S.sel].join(','));   // a quiz highlights its answer through S.sel: keep it out of the URL
+  if (S.ghost) p.set('g', '1'); if (S.iso) p.set('i', '1');
+  for (const h of hashParts) { const v = h.get(); if (v) p.set(h.key, v); }
   history.replaceState(null, '', p.toString() ? `#${p}` : location.pathname + location.search);
 }
 async function restoreHash() {
@@ -1454,9 +1470,19 @@ async function restoreHash() {
   const list = (p.get('s') || 'skeletal').split(',').filter((k) => S.M.systems.some((s) => s.key === k));
   await Promise.all(list.map((k) => setSystemVisible(k, true)));
   const ids = (p.get('sel') || '').split(',').filter(Boolean).map((id) => S.byId.get(id)).filter(Boolean);
-  if (ids.length === 1) { await selectRec(ids[0]); revealInTree(ids[0]); }
+  if (ids.length && isOneStructure(ids)) { await selectRec(ids[0]); revealInTree(ids[0]); }
   else if (ids.length > 1) selectMany(ids);
   else fitVisible();
+  if (p.get('g') === '1' || p.get('i') === '1') { S.ghost = p.get('g') === '1'; if (p.get('i') === '1' && S.sel.size) setIso(true); else restyle(); }
+  hashParams = p;
+  for (const h of hashParts) if (p.has(h.key)) h.set(p.get(h.key));
+}
+// a selection that is just one structure's sides / parts (Femur.l + Femur.r) reopens as that structure, not as a list
+function isOneStructure(recs) { const sib = new Set(siblingsOf(recs[0]).map((r) => r.id)); return recs.every((r) => sib.has(r.id)); }
+let hashParams = null;   // the parameters the page was opened with (a module registering later still gets its value)
+function registerHashPart(part) {
+  hashParts.push(part);
+  if (hashParams?.has(part.key)) part.set(hashParams.get(part.key));
 }
 
 // -------------------------------------------------------------------- init --
@@ -1533,6 +1559,9 @@ const atlas = window.atlas = {
   wholeOf,                                               // wholeOf(rec) -> every record of the anatomical unit (all heads/parts, both sides of a paired name)
   groupStructures,                                       // groupStructures(system, groupId) -> records under that group, sub-groups included
   registerTab, openMotion, isMuscle, loadFacts, loadVocab,
+  saveHash, registerHashPart, isOneStructure,                            // shareable link state: registerHashPart({ key, get() -> string, set(value) })
+  registerFactsExtra: (fn) => { FACT_EXTRAS.push(fn); if (S.cur && S.M) showInfo(siblingsOf(S.cur)); },   // extra rows under the muscle facts card
+  describe: null,       // knowledge.js assigns describe(rec) -> element: a data-derived summary when a structure has no description
   speak, stopSpeech, plainDesc,                          // text-to-speech: speak(text, btn?) toggles that button's "speaking" state
   movePinTo, rebuildPins,                                // keep a bone's landmark pins glued to it during an animation; rebuildPins() puts them back at rest
   pickHandler: null,    // set fn(rec|null, landmark|null, pointerEvent) to receive canvas clicks instead of the normal selection; hover names are suppressed while set

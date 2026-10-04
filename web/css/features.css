@@ -1,0 +1,100 @@
+/* Feature modules: knowledge.js (relationship chips, key facts, clinical notes, summaries), section.js, views.js, lessons.js */
+.kfacts .frow { grid-template-columns: 118px 1fr; }
+.ksupply .frow { grid-template-columns: 102px 1fr; }   /* lines up with the muscle facts card above */
+.kfacts .frow dt { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.kchips { display: flex; flex-wrap: wrap; gap: 4px; }
+.kchip { font-size: 12px; line-height: 1.3; text-align: left; background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); color: var(--text); border-radius: 6px; padding: 2px 7px; }
+.kchip:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.kchip.plain { background: none; border-style: dashed; border-color: var(--line); color: var(--muted); cursor: default; }
+.ktrace { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+.ksupply .facts { margin-top: 8px; }
+.kclin { margin: 14px 0 6px; padding: 10px 12px; border-radius: var(--radius); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
+  background: color-mix(in srgb, var(--warn) 8%, var(--panel)); }
+.kclin h4 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--warn); }
+.kclin p { margin: 0; line-height: 1.45; }
+.kclin p.fine { margin-top: 6px; }
+.ksummary .facts { margin-top: 4px; }
+@media (max-width: 720px) { .kfacts .frow { grid-template-columns: 92px 1fr; } }
+
+/* section.js: cross-section controls (floating card on the stage) */
+.sec-panel { position: absolute; left: 12px; bottom: 70px; z-index: 6; width: min(380px, calc(100% - 24px)); display: grid; gap: 8px;
+  padding: 10px 12px; background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .35); }
+.sec-panel[hidden] { display: none; }
+.sec-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sec-row b { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-right: auto; }
+.sec-axes button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
+.sec-slider { flex: 1; min-width: 140px; accent-color: var(--accent); }
+.sec-level { font-size: 12px; color: var(--muted); min-width: 120px; font-variant-numeric: tabular-nums; }
+.sec-x { background: none; border: 0; color: var(--muted); font-size: 20px; line-height: 1; padding: 0 4px; border-radius: 6px; }
+.sec-x:hover { color: var(--text); background: var(--line); }
+#sectionBtn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* views.js: saved views, note pins and the shared-view note */
+.mode-btn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.vpanel { position: fixed; top: 56px; right: 12px; z-index: 30; width: min(360px, calc(100vw - 24px)); max-height: calc(100vh - 72px); overflow: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 10px 32px rgba(0, 0, 0, .45); }
+.vpanel[hidden] { display: none; }
+.vhead { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
+.vhead h2 { font-size: 15px; margin: 0; }
+.vbody { padding: 4px 12px 12px; display: grid; gap: 8px; }
+.vbody h3 { margin: 10px 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+.vin { width: 100%; box-sizing: border-box; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; color: var(--text); font: inherit; font-size: 13px; resize: vertical; }
+.vrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.vlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.vlist li { padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); display: grid; gap: 6px; }
+.vmeta { display: grid; gap: 2px; }
+.vmeta small { color: var(--muted); font-size: 11px; }
+.vprev { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.vpin-list { display: grid; gap: 4px; }
+.vpin-row { display: grid; grid-template-columns: 22px 1fr 26px; gap: 6px; align-items: center; }
+.vpin-row b, .vpin i { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #fbbf24; color: #1f1300; font-size: 11px; font-style: normal; font-weight: 700; }
+.vnote-x { background: none; border: 0; color: var(--muted); font-size: 18px; line-height: 1; padding: 2px 6px; border-radius: 6px; }
+.vnote-x:hover { color: var(--text); background: var(--line); }
+.vpins { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+.vpin { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 5px; margin: -10px 0 0 -10px; white-space: nowrap; }
+.vpin span { font-size: 12px; padding: 2px 7px; border-radius: 5px; background: rgba(15, 20, 28, .86); color: #fff; border: 1px solid #fbbf24; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.vnote { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 5; width: min(460px, calc(100% - 24px)); display: grid; grid-template-columns: 1fr auto; gap: 2px 8px;
+  padding: 10px 12px; background: color-mix(in srgb, var(--panel) 95%, transparent); border: 1px solid #fbbf24; border-radius: var(--radius); box-shadow: 0 6px 24px rgba(0, 0, 0, .35); }
+.vnote[hidden] { display: none; }
+.vnote b { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: #fbbf24; }
+.vnote p { grid-column: 1; margin: 0; line-height: 1.45; white-space: pre-wrap; }
+.vnote .vnote-x { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
+canvas.placing { cursor: crosshair !important; }
+
+/* lessons.js: lesson card on the stage */
+.lcard { position: absolute; right: 12px; bottom: 12px; z-index: 6; width: min(430px, calc(100% - 24px)); max-height: 60%; overflow: auto; display: grid; gap: 8px;
+  padding: 12px 14px; background: color-mix(in srgb, var(--panel) 96%, transparent); border: 1px solid var(--accent); border-radius: var(--radius); box-shadow: 0 10px 32px rgba(0, 0, 0, .45); }
+.lcard[hidden] { display: none; }
+.lhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.lhead small { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
+.lhead h2 { margin: 2px 0 0; font-size: 17px; outline: none; }
+.ldots { display: flex; gap: 4px; }
+.ldots i { flex: 1; height: 3px; border-radius: 2px; background: var(--line); }
+.ldots i.done { background: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.ldots i.on { background: var(--accent); }
+.ltext { margin: 0; line-height: 1.5; }
+.lnav { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.lchips { margin-top: 8px; }
+.lesson-open .sec-panel { bottom: auto; top: 56px; }
+.lesson-open #hint { display: none; }
+
+/* phones: the stage is short (the info panel sits below it), so the floating cards stay compact */
+@media (max-width: 860px) {
+  .toolbar { right: 8px; left: 8px; top: 8px; flex-wrap: wrap; gap: 4px; }
+  .toolbar button { padding: 4px 8px; font-size: 12.5px; }
+  .sec-panel { left: 8px; bottom: 8px; width: calc(100% - 16px); padding: 8px 10px; gap: 6px; }
+  .lesson-open .sec-panel { display: none; }      /* the lesson sets the cut; the Section button still opens the controls */
+  .lcard { left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 52%; padding: 10px 12px; gap: 6px; }
+  .lcard .ltext { font-size: 13.5px; }
+  .lcard .lnav { position: sticky; bottom: -10px; background: var(--panel); padding: 6px 0 2px; }
+  .lhead h2 { font-size: 15px; }
+  .vnote { top: 48px; }
+  .vpanel { top: calc(var(--top) + 6px); right: 8px; }
+}
+@media (max-width: 520px) {
+  #topbar .views { display: none; }               /* touch: orbit / pinch directly; the camera buttons come back on wider screens */
+  #topbar .mode-btn { padding: 5px 9px; }
+  #topbar .lang select { max-width: 92px; }
+}

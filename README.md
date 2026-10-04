@@ -20,6 +20,11 @@ web/  = the static site (index.html + js/ + css/ + models/ + data/ + img/), no b
 | `tools/export_web.py` | Draco GLB per system (+ manifest, descriptions, translations) |
 | `tools/zcommon.py` | Colour palette (Z-Anatomy's comic-shader materials can't be exported, so each is mapped to a Principled colour) |
 | `tools/test_navigator.py` | Regression test for the Blender navigator against the real scene |
+| `tools/fix_source_integrity.py` | Repairs the scene from its geometry: left/right names on the wrong side, mirrored landmark pins, lost names, structures under the wrong group (dry run by default) |
+| `tools/muscle_facts.txt` → `build_muscle_facts.py` | Curated origin / insertion / action / nerve + joint actions → `web/data/muscles.json` (`@mcp1` limits an animation to one digit) |
+| `tools/relations_src.json` → `build_relations.py` | Nerve and blood supply of every curated muscle, key facts and clinical notes for nerves, vessels and bones → `web/data/relations.json` |
+| `tools/fetch_wiki_descriptions.py`, `desc_handwritten.json`, `postprocess_knowledge.py` | Fill structures the scene has no text for (matching Wikipedia leads, or short atlas notes) and clean citation / markup leftovers; run automatically at the end of the export |
+| `tools/browser/` | Headless-Chrome tests (`t_quiz`, `t_motion*`, `t_knowledge`, `t_section`, `t_views`, `t_study`, `t_lessons`, `t_digits`, …) |
 | `renders/` | Rendered PNGs (1200×1800) |
 | `web/` | The deployable site |
 
@@ -28,7 +33,22 @@ web/  = the static site (index.html + js/ + css/ + models/ + data/ + img/), no b
 ```
 python -m http.server 8765 --directory web      # then open http://127.0.0.1:8765
 ```
-Deep links: `#s=skeletal,nervous&sel=Femur.l&lang=la`. Keys: `/` search · `G` ghost others · `I` isolate · `F` focus · `Esc` clear.
+Deep links: `#s=skeletal,nervous&sel=Femur.l&lang=la`, plus `g=1` / `i=1` (ghost / isolate), `cut=y0.620` (cross-section), `cam=…`, `note=…`, `pins=…` (saved views) and `lesson=knee.3`.
+Keys: `/` search · `G` ghost others · `I` isolate · `F` focus · `X` cross-section · `←` `→` lesson steps · `Esc` clear.
+
+Browser tests: serve on port 8770, then `node tools/browser/run.mjs --script tools/browser/t_lessons.mjs --logs errors` (see the header of `run.mjs`).
+
+## Site features (web/js)
+
+| Module | What |
+|---|---|
+| `app.js` | Viewer, navigation tree, search, selection, info panel, export, text-to-speech; the public `window.atlas` API the other modules use |
+| `knowledge.js` | **Key facts** tab for nerves, vessels and bones (roots, course, branches, supply, articulations, clinical relevance), nerve / blood supply rows on muscles with *Show nerve supply* / *Show blood supply* tracing on the model, and a data-derived summary for structures without a description |
+| `section.js` | Sagittal / coronal / transverse **cross-section** with a slider; picking ignores the cut-away side |
+| `views.js` | **Saved views** (systems, selection, cut, camera, note) and shareable links, labelled **note pins** on the model |
+| `lessons.js` + `data/lessons.json` | **Guided lessons** (shoulder, upper-limb nerves, knee, heart, trunk sections, cranial nerves) that end in a quiz on the same topic |
+| `quiz.js` | Study mode: label / identify / locate / facts / movements quizzes; **spaced review** (due after 1, 3, 7, 16 days), Today panel with streak and weakest topics, **exam mode** with a 70 % pass mark |
+| `motion.js` | Joint motion animations, including muscle-specific digit movement |
 
 ## Rebuild the assets
 
@@ -37,7 +57,11 @@ blender -b Startup.blend --python tools/export_web.py -- --out web
 blender -b Startup.blend --python tools/render_views.py -- --out renders            # all systems, 4 views
 blender -b Startup.blend --python tools/render_views.py -- --out web/img --views front --scale 0.3 --only skeletal,muscular
 blender -b Startup.blend --python tools/test_navigator.py                           # Blender navigator regression test
+blender -b Startup.blend --python tools/fix_source_integrity.py [-- --apply]          # scene integrity repair (back up the .blend first)
+python tools/build_muscle_facts.py && python tools/build_relations.py               # curated muscle facts, then relations (needs muscles.json)
+python tools/fetch_wiki_descriptions.py && python tools/postprocess_knowledge.py    # optional: refresh the Wikipedia supplement
 ```
+`export_web.py` rewrites `web/data/desc/*.json` from the scene and then runs `postprocess_knowledge.py`, so the supplements survive a re-export.
 Blender 5.2 lives at `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`.
 
 ## Deploy: GitHub → Vercel (→ Supabase optional)
@@ -60,7 +84,9 @@ Search, body-system filter (CNS/PNS/respiratory/digestive/…), joint-type filte
 - Vessels and nerves are bevelled curves: cardiovascular ≈ 2.5 M and nervous ≈ 1.5 M triangles. With every system on the scene is ≈ 8 M triangles: fine on a desktop GPU, heavy on phones. Systems load on demand and only the skeleton is on at start. A decimated LOD tier for curves is the next optimisation.
 - Hover names use CPU raycasting; on slow machines the site switches hover off automatically (click still works).
 - Joint *types* (hinge, pivot…) come from a curated name list because the scene's own type groups are empty.
+- About 300 minor structures (small vessel branches, lymph nodes, bursae, ligament parts) still have no written description; they show a summary built from the atlas's own data. Three unnamed vessels in the scene are labelled *Unidentified …* until an expert names them.
+- Relationship data covers the 229 curated muscles and the main nerves, vessels and bones; 17 referenced structures (e.g. phrenic nerve, lingual artery) are not modelled and appear as plain text.
 
 ## Licence & attribution
 
-Anatomy geometry: BodyParts3D © The Database Center for Life Science, **CC BY-SA 2.1 JP**, modified by Z-Anatomy; descriptions from Wikipedia (**CC BY-SA**). Derived works must carry the same licence and attribution (shown in the site and in `web/data/license.txt`).
+Anatomy geometry: BodyParts3D © The Database Center for Life Science, **CC BY-SA 2.1 JP**, modified by Z-Anatomy; descriptions from Wikipedia (**CC BY-SA**), except entries marked as Z-Anatomy Atlas notes. Key facts, lessons and clinical notes are written for this atlas from standard references and are educational, not medical advice. Derived works must carry the same licence and attribution (shown in the site and in `web/data/license.txt`).

@@ -45,13 +45,25 @@ let P = { s: {} };
 try { const j = JSON.parse(localStorage.getItem(KEY)); if (j && j.s) P = j; } catch { /* private window / blocked storage: keep in memory */ }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch { /* ignore */ } };
 const stat = (sys) => (P.s[sys] ||= { seen: {}, best: {}, plays: 0 });
-// Leitner boxes: 0 unseen, 1 missed last time, 2 answered right once, 3 right at least twice in a row
+// Leitner boxes with spaced review: seen[key] = [right, wrong, box, last answered (ms)]. Box 0 unseen, 1 missed last time
+// (due again at once), 2-5 answered right 1-4 times in a row; a structure comes due again INTERVAL[box] days after its last answer.
+const DAY = 864e5, INTERVAL = [0, 0, 1, 3, 7, 16];
+const today = () => new Date().toISOString().slice(0, 10);
 function mark(sys, key, ok) {
-  const st = stat(sys), a = st.seen[key] || [0, 0, 0];
-  if (ok) { a[0]++; a[2] = Math.min(3, Math.max(a[2], 1) + 1); } else { a[1]++; a[2] = 1; }
+  const st = stat(sys), a = st.seen[key] || [0, 0, 0, 0];
+  if (ok) { a[0]++; a[2] = Math.min(5, Math.max(a[2], 1) + 1); } else { a[1]++; a[2] = 1; }
+  a[3] = Date.now();
   st.seen[key] = a;
+  (P.days ||= {})[today()] = (P.days[today()] || 0) + 1;
 }
 const boxOf = (sys, key) => stat(sys).seen[key]?.[2] || 0;
+const isDue = (a) => !!a && a[2] >= 1 && Date.now() >= (a[3] || 0) + INTERVAL[Math.min(a[2], 5)] * DAY;
+function streak() {   // consecutive days with at least one answer, ending today or yesterday
+  const d = new Date(); let n = 0;
+  if (!P.days?.[today()]) d.setDate(d.getDate() - 1);
+  while (P.days?.[d.toISOString().slice(0, 10)]) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
 
 // ------------------------------------------------------------------- units --
 // A unit is one answer: every head/part of a muscle and both sides of a paired structure form ONE unit named once.
@@ -378,21 +390,38 @@ function sectionProgress(sec) {
   const units = sectionUnits(sec.key), st = stat(sec.key);
   const learned = units.filter((u) => (st.seen[u.key]?.[2] || 0) >= 2).length;
   const missed = units.filter((u) => st.seen[u.key]?.[2] === 1).length;
-  const best = Math.max(0, ...Object.values(st.best));
-  return { total: units.length, learned, missed, best, plays: st.plays };
+  const best = Math.max(0, ...Object.entries(st.best).filter(([m]) => !m.startsWith('exam:')).map(([, v]) => v));
+  const due = units.filter((u) => isDue(st.seen[u.key])).length;
+  return { total: units.length, learned, missed, best, plays: st.plays, due };
+}
+// weakest topics of a section: accuracy per topic over the structures answered at least once (3+ answers per topic)
+function weakTopics(sec) {
+  const units = sectionUnits(sec.key), st = stat(sec.key), topics = topicOptions(units), ids = new Set(topics.map((t) => t.id));
+  const topicOf = (gid) => { let g = gid; while (g && !ids.has(g)) g = parentOf(g); return g; };
+  const acc = new Map();
+  for (const u of units) {
+    const a = st.seen[u.key]; if (!a || !(a[0] + a[1])) continue;
+    const t = topicOf(u.group); if (!t) continue;
+    const x = acc.get(t) || { right: 0, wrong: 0, n: 0 }; x.right += a[0]; x.wrong += a[1]; x.n++; acc.set(t, x);
+  }
+  return [...acc].filter(([, x]) => x.right + x.wrong >= 3 && x.wrong > 0)
+    .map(([id, x]) => ({ sec, id, label: S.groups.get(id)?.name || id, pct: Math.round((x.right / (x.right + x.wrong)) * 100), n: x.n }))
+    .sort((a, b) => a.pct - b.pct);
 }
 function showMenu() {
   Q.view = 'menu'; Q.round = null; Q.section = null; clearOverlay(); atlas.pickHandler = onPick;
+  const progress = new Map(sections().map((sec) => [sec.key, sectionProgress(sec)]));
   const cards = sections().map((sec) => {
-    const pr = sectionProgress(sec);
+    const pr = progress.get(sec.key);
     return h('button', { class: 'qcard', type: 'button', style: `--dot:${sec.color}`, onclick: () => showSetup(sec) },
       h('span', { class: 'qcard-dot' }),
       h('span', { class: 'qcard-main' }, h('b', {}, sec.label), h('small', {}, sec.blurb),
         bar(pr.total ? pr.learned / pr.total : 0),
-        h('small', { class: 'qcard-stat' }, `${pr.learned} / ${pr.total} learned${pr.best ? ` · best ${pr.best}%` : ''}${pr.missed ? ` · ${pr.missed} to review` : ''}`)));
+        h('small', { class: 'qcard-stat' }, `${pr.learned} / ${pr.total} learned${pr.best ? ` · best ${pr.best}%` : ''}${pr.due ? ` · ${pr.due} due` : ''}`)));
   });
   frame(head('Study: diagram quizzes', { sub: 'Pick a section' }),
     h('div', { class: 'qs-body' },
+      todayPanel(progress),
       h('p', { class: 'qs-lead' }, 'Every section has its own quiz on the live 3D model: label pins, identify a highlighted structure, or find a named one.'),
       h('div', { class: 'qcards' }, cards),
       h('p', { class: 'qs-fine' }, `Not quizzed: ${Object.entries(SKIP).map(([k, v]) => `${atlas.SYS[k]?.[0] || k} (${v})`).join('; ')}.`)));
@@ -423,11 +452,14 @@ function showSetup(sec) {
       cfg.mode === 'label'
         ? [sel('qPins', 'Pins per diagram', [[5, '5'], [8, '8'], [12, '12']], cfg.pins, (v) => { cfg.pins = +v; }),
           h('label', { class: 'qcheck' }, h('input', { type: 'checkbox', checked: cfg.instant, onchange: (e) => { cfg.instant = e.target.checked; } }), 'Check each answer as I go (otherwise check at the end)')]
-        : sel('qLen', 'Questions', [[5, '5'], [10, '10'], [20, '20']], cfg.len, (v) => { cfg.len = +v; }),
+        : [sel('qLen', 'Questions', [[5, '5'], [10, '10'], [20, '20'], [30, '30']], cfg.len, (v) => { cfg.len = +v; }),
+          h('label', { class: 'qcheck' }, h('input', { type: 'checkbox', checked: !!cfg.exam, onchange: (e) => { cfg.exam = e.target.checked; } }),
+            `Exam mode: no feedback until the end, pass mark ${PASS}%`)],
       poolInfo,
       h('div', { class: 'qs-actions' }, go,
-        review ? h('button', { class: 'btn', type: 'button', onclick: () => startRound(true) }, `Review misses (${review})`) : null),
-      h('p', { class: 'qs-fine' }, st.plays ? `Played ${st.plays} time${st.plays === 1 ? '' : 's'} · ${Object.entries(st.best).map(([m, p]) => `${MODES[m]?.title || m} best ${p}%`).join(' · ')}` : 'Progress is saved in this browser.')));
+        review ? h('button', { class: 'btn', type: 'button', onclick: () => startRound(true) }, `Review misses (${review})`) : null,
+        dueCount(sec) && cfg.mode !== 'facts' && cfg.mode !== 'moves' ? h('button', { class: 'btn', type: 'button', onclick: () => startRound('due') }, `Review due (${dueCount(sec)})`) : null),
+      h('p', { class: 'qs-fine' }, st.plays ? `Played ${st.plays} time${st.plays === 1 ? '' : 's'} · ${Object.entries(st.best).map(([m, p]) => `${m.startsWith('exam:') ? `${MODES[m.slice(5)]?.title || m} exam` : MODES[m]?.title || m} best ${p}%`).join(' · ')}` : 'Progress is saved in this browser.')));
   refresh(); focusHead();
 }
 const factItemsOrEmpty = () => (F ? factItems() : []);
@@ -439,8 +471,31 @@ function poolFor(sec, cfg, review = false) {
   const facts = cfg.mode === 'facts' || cfg.mode === 'moves';
   const all = facts ? factItemsOrEmpty() : sectionUnits(sec.key);
   let pool = applyFilter(all, review ? { group: '', level: 'all' } : cfg);
-  if (review) { const st = stat(sec.key); pool = pool.filter((u) => st.seen[u.key]?.[2] === 1); }
+  if (review === 'due') { const st = stat(sec.key); pool = pool.filter((u) => isDue(st.seen[u.key])); }
+  else if (review) { const st = stat(sec.key); pool = pool.filter((u) => st.seen[u.key]?.[2] === 1); }
   return { pool, all };
+}
+const dueCount = (sec) => sectionUnits(sec.key).filter((u) => isDue(stat(sec.key).seen[u.key])).length;
+const PASS = 70;   // exam pass mark, percent
+// "Today": answers today, day streak, everything due across sections, and the weakest topics to practise next
+function todayPanel(progress) {
+  const secs = sections(), due = secs.map((s) => [s, progress.get(s.key).due]).filter(([, n]) => n).sort((a, b) => b[1] - a[1]);
+  const totalDue = due.reduce((a, [, n]) => a + n, 0), answered = P.days?.[today()] || 0, days = streak();
+  const weak = secs.flatMap((s) => weakTopics(s)).sort((a, b) => a.pct - b.pct).slice(0, 4);
+  const startDue = (sec) => { Q.section = sec; Q.cfg.mode = 'identify'; startRound('due'); };
+  return h('section', { class: 'qtoday', 'aria-label': 'Today' },
+    h('div', { class: 'qtoday-stats' },
+      h('div', {}, h('b', {}, String(totalDue)), h('small', {}, 'due for review')),
+      h('div', {}, h('b', {}, String(answered)), h('small', {}, 'answered today')),
+      h('div', {}, h('b', {}, String(days)), h('small', {}, 'day streak'))),
+    totalDue
+      ? h('div', { class: 'qs-actions' }, h('button', { class: 'btn primary', type: 'button', onclick: () => startDue(due[0][0]) }, `Review ${Math.min(due[0][1], 20)} due · ${due[0][0].label}`),
+        due.length > 1 ? h('small', { class: 'qs-fine' }, `Also due: ${due.slice(1).map(([s, n]) => `${s.label} (${n})`).join(', ')}`) : null)
+      : h('p', { class: 'qs-fine' }, P.days ? 'Nothing is due. Structures you answer come back after 1, 3, 7 and 16 days, and straight away when missed.' : 'Answer a few questions and they will come back for review after 1, 3, 7 and 16 days, sooner when missed.'),
+    weak.length ? h('div', { class: 'qweak' }, h('h3', {}, 'Weakest topics'),
+      h('ul', { role: 'list' }, weak.map((w) => h('li', {},
+        h('span', {}, h('b', {}, w.label), h('small', {}, ` · ${w.sec.label} · ${w.pct}% correct`)),
+        h('button', { class: 'btn', type: 'button', onclick: () => { Q.cfg = { ...Q.cfg, mode: 'identify', group: w.id, level: 'all' }; showSetup(w.sec); } }, 'Practise'))))) : null);
 }
 
 // ------------------------------------------------------------------- rounds --
@@ -452,6 +507,7 @@ async function startRound(review) {
   const token = ++Q.token;
   try {
     if (review && cfg.mode === 'label') cfg.mode = 'identify';
+    if (review) cfg.exam = false;
     busy('Loading the 3D model…');
     await ensureData(cfg.mode);
     await enterScene(sec.key, CTX[cfg.mode] || [sec.key]);
@@ -460,7 +516,7 @@ async function startRound(review) {
     if (pool.length < (review ? 1 : cfg.mode === 'label' ? 3 : 4)) { Q.busy = false; showSetup(sec); return; }
     const r = Q.round = { sec, cfg, review, mode: cfg.mode, pool, all, log: [], i: 0, score: 0, queue: [], spare: [], q: null, token };
     if (cfg.mode === 'label') { r.total = 0; await newDiagram(); }
-    else { const s = shuffle(pool); r.queue = s.slice(0, cfg.len); r.spare = s.slice(cfg.len); r.total = r.queue.length; await showQuestion(); }
+    else { const s = shuffle(pool), n = review === 'due' ? 20 : cfg.len; r.queue = s.slice(0, n); r.spare = s.slice(n); r.total = r.queue.length; await showQuestion(); }
   } catch (e) { console.error(e); busy('Something went wrong while building the quiz. Go back and try another topic.'); }
   finally { Q.busy = false; }
 }
@@ -551,7 +607,7 @@ function renderQuestion() {
   const locate = r.mode === 'locate';
   const stem = locate ? h('p', { class: 'qstem' }, 'Click the ', h('b', { class: 'qname' }, disp(item)), ' on the model.')
     : h('p', { class: 'qstem' }, q.stem ? q.stem() : 'What is the highlighted structure?');
-  const body = [h('div', { class: 'qprog' }, h('span', {}, `Question ${n} of ${r.queue.length}`), h('span', {}, `Score ${r.score}`)), bar((n - 1) / r.queue.length), stem];
+  const body = [h('div', { class: 'qprog' }, h('span', {}, `Question ${n} of ${r.queue.length}`), h('span', {}, r.cfg.exam ? 'Exam mode' : `Score ${r.score}`)), bar((n - 1) / r.queue.length), stem];
   if (!locate) {
     body.push(h('div', { class: 'qopts', role: 'group', 'aria-label': 'Answers' }, q.opts.map((o, i) => {
       const cls = 'qopt' + (q.answered ? (o.correct ? ' ok' : q.chosen === i ? ' bad' : ' dim') : '');
@@ -559,10 +615,10 @@ function renderQuestion() {
     })));
   } else if (!q.answered) {
     body.push(h('p', { class: 'qs-fine' }, 'Drag to rotate or scroll to zoom if you need a better look. Then click once on the structure.'),
-      h('div', { class: 'qs-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => resetView() }, 'Reset view'), h('button', { class: 'btn', type: 'button', onclick: () => giveUp() }, 'Show me')));
+      h('div', { class: 'qs-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => resetView() }, 'Reset view'), h('button', { class: 'btn', type: 'button', onclick: () => giveUp() }, r.cfg.exam ? 'Skip' : 'Show me')));
   }
   if (q.answered) body.push(feedback(q), h('div', { class: 'qs-actions' }, h('button', { class: 'btn primary', type: 'button', 'data-primary': '', onclick: () => { r.i++; showQuestion(); } }, r.i + 1 >= r.queue.length ? 'See results' : 'Next')));
-  frame(head(`${MODES[r.mode].title} · ${r.sec.label}`, { sub: r.review ? 'Reviewing missed structures' : topicName(r) }),
+  frame(head(`${MODES[r.mode].title} · ${r.sec.label}`, { sub: r.review === 'due' ? 'Spaced review: due today' : r.review ? 'Reviewing missed structures' : r.cfg.exam ? `Exam · ${topicName(r)}` : topicName(r) }),
     h('div', { class: 'qs-body' }, ...body, h('div', { class: 'qs-actions foot' }, quitButton())));
   if (q.answered) { const b = panel.querySelector('[data-primary]'); b?.focus(); b?.scrollIntoView({ block: 'nearest' }); } else focusHead();
 }
@@ -598,13 +654,17 @@ function choose(i) {
   const o = q.opts[i]; if (!o) return;
   q.answered = true; q.chosen = i; q.ok = !!o.correct;
   recordAnswer(q.item, q.ok, { text: disp(q.item) });
+  if (r.cfg.exam) return examNext();
   revealScene(q);
   renderQuestion();
 }
+function examNext() { const r = Q.round; unhighlight(); clearOverlay(); r.i++; showQuestion(); }   // exam: no feedback until the results
 function giveUp() {
   const r = Q.round, q = r?.q; if (!q || q.answered) return;
   q.answered = true; q.ok = false; q.picked = 'giveup';
-  recordAnswer(q.item, false, { text: disp(q.item) }); revealScene(q); renderQuestion();
+  recordAnswer(q.item, false, { text: disp(q.item) });
+  if (r.cfg.exam) return examNext();
+  revealScene(q); renderQuestion();
 }
 function revealScene(q) {
   const r = Q.round, item = q.item;
@@ -618,6 +678,7 @@ function onPick(rec, lm) {
   const q = r.q, ok = q.item.ids.has(target.id);
   q.answered = true; q.ok = ok; q.clicked = ok ? '' : atlas.nameOf(target);
   recordAnswer(q.item, ok, { text: disp(q.item), clicked: q.clicked });
+  if (r.cfg.exam) return examNext();
   revealScene(q); renderQuestion();
 }
 function resetView() { const q = Q.round?.q; if (q?.pose) goTo(q.pose); }
@@ -817,13 +878,15 @@ async function showResults() {
   const r = Q.round; if (!r) return;
   Q.view = 'results'; atlas.pickHandler = onPick;
   const total = r.mode === 'label' ? r.log.length : r.queue.length, pct = total ? Math.round((r.score / total) * 100) : 0;
-  const st = stat(r.sec.key); st.plays++; st.best[r.mode] = Math.max(st.best[r.mode] || 0, pct); st.last = { mode: r.mode, pct, ts: Date.now() }; save();
+  const st = stat(r.sec.key), bestKey = r.cfg.exam ? `exam:${r.mode}` : r.mode;
+  st.plays++; st.best[bestKey] = Math.max(st.best[bestKey] || 0, pct); st.last = { mode: r.mode, pct, ts: Date.now(), exam: !!r.cfg.exam }; save();
+  const exam = r.cfg.exam ? h('p', { class: 'qexam ' + (pct >= PASS ? 'pass' : 'fail'), role: 'status' }, pct >= PASS ? `Passed (pass mark ${PASS}%)` : `Not passed yet: ${PASS}% needed`) : null;
   const missed = r.log.filter((l) => !l.ok);
   const list = h('ul', { class: 'qres', role: 'list' }, r.log.map((l) => h('li', {}, h('button', { class: 'qres-row ' + (l.ok ? 'ok' : 'bad'), type: 'button', onclick: () => showUnit(l.u) },
     h('span', { class: 'qmark' }, l.ok ? '✓' : '✗'), h('span', {}, l.text || disp(l.u)), l.clicked ? h('small', {}, `you clicked ${l.clicked}`) : null))));
   frame(head('Results', { sub: `${MODES[r.mode].title} · ${r.sec.label}` }),
     h('div', { class: 'qs-body' },
-      h('div', { class: 'qscore' }, h('b', {}, `${r.score} / ${total}`), h('span', {}, `${pct}%`)), bar(pct / 100),
+      h('div', { class: 'qscore' }, h('b', {}, `${r.score} / ${total}`), h('span', {}, `${pct}%`)), bar(pct / 100), exam,
       h('p', { class: 'qs-lead' }, pct >= 90 ? 'Excellent.' : pct >= 70 ? 'Solid. A few to revisit.' : pct >= 40 ? 'Getting there. Review the misses below.' : 'Keep at it: try again on Major structures first.'),
       missed.length ? h('p', { class: 'qs-fine' }, 'Click any row to see it in 3D with its name.') : null,
       list,

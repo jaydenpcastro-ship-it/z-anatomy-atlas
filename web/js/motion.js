@@ -68,7 +68,7 @@ function boot() {
     if (atlas.isMuscle(rec)) {
       const f = resolveFacts(rec.name);
       const by = new Map();
-      for (const [j, m, role] of f?.acts || []) if (hasMotion(j, m)) { if (!by.has(j)) by.set(j, []); by.get(j).push({ m, role }); }
+      for (const [j, m, role, sites] of f?.acts || []) if (hasMotion(j, m)) { if (!by.has(j)) by.set(j, []); by.get(j).push({ m, role, sites }); }
       return [...by].map(([joint, moves]) => ({ joint, moves }));
     }
     if (rec.system === 'skeletal') joints = [...(boneJoints.get(rec.name) || [])];
@@ -136,11 +136,15 @@ function boot() {
         S0.ops.push({ key, kind: 'r', w: 1, sign: sg, circ: tag, site: st, p: new V3(...st.p), axis: new V3(...st.ax[ax]).normalize(), ids: idsOfSite(st), axName: ax });
       }
     } else {
+      // a muscle that moves only some digits (e.g. extensor pollicis longus: thumb IP) animates only those sites
+      const only = cfg.sites?.length ? new Set(cfg.sites) : null;
       for (const o of mv.ops) {
+        if (only && !only.has(o[0])) continue;
         const st = siteOf(cfg.joint, o[0], side);
         S0.ops.push({ key: o[0], kind: o[2], w: o[3], sign: o[si], site: st, p: new V3(...st.p), axis: new V3(...st.ax[o[1]]).normalize(), ids: idsOfSite(st), axName: o[1] });
       }
     }
+    if (!S0.ops.length) { SES = null; return null; }
     S0.primary = Math.max(0, S0.ops.findIndex((o) => o.key === mv.main && o.kind !== 'c'));
     if (S0.ops[S0.primary]?.kind === 'c') S0.primary = Math.max(0, S0.ops.findIndex((o) => o.kind !== 'c'));
     S0.site = S0.ops[S0.primary].site;
@@ -400,7 +404,9 @@ function boot() {
     const prim = S0.ops[S0.primary], first = [...prim.ids][0];
     const Mo0 = new M4(); for (let i = 0; i < S0.primary; i++) if (S0.ops[i].ids.has(first)) Mo0.multiply(S0.opM[i]);
     S0.pivot0 = prim.p.clone().applyMatrix4(Mo0); S0.axis0 = prim.axis.clone().transformDirection(Mo0);
-    const pr = new V3(...S0.mv.pr[S0.side]), Mb = new M4();
+    // the baked probe sits on the movement's main digit; when a muscle moves other digits only, probe their tip instead
+    const tip = S0.cfg.sites?.length && !S0.cfg.sites.includes(S0.mv.main) ? tipBoneOf(S0) : null;
+    const pr = tip ? tip.pt.clone() : new V3(...S0.mv.pr[S0.side]), Mb = new M4();
     for (let i = 0; i < S0.ops.length; i++) if (S0.ops[i].ids.has(first)) Mb.multiply(S0.opM[i]);
     S0.q0 = pr.clone().applyMatrix4(Mb.clone().invert()); S0.probeBone = first; S0.pr0 = pr;
     let r0 = perpTo(pr.clone().sub(S0.pivot0), S0.axis0);
@@ -793,7 +799,7 @@ function boot() {
     const mvEntry = tg.moves.find((x) => x.m === TAB.move), role = mvEntry?.role || '';
     const key = `${rec.id}|${TAB.joint}|${TAB.move}|${TAB.side}|${TAB.view}`;
     if (!SES || SES.key !== key) {
-      startSession({ joint: TAB.joint, movement: TAB.move, side: TAB.side, view: TAB.view, rec, muscle: isM ? rec : null, role, key, speed: TAB.speed });
+      startSession({ joint: TAB.joint, movement: TAB.move, side: TAB.side, view: TAB.view, rec, muscle: isM ? rec : null, role, sites: mvEntry?.sites, key, speed: TAB.speed });
     }
     const refresh = () => atlas.showInfo(atlas.siblingsOf(rec));
     const set = (o) => { Object.assign(TAB, o); refresh(); };
@@ -840,7 +846,8 @@ function boot() {
   function openMotion(req) {
     if (!req || !MO.joints[req.joint]?.moves[req.movement]) return Promise.resolve(null);
     const rec = req.muscle ? atlas.recsByName('muscular', req.muscle).find((r) => !req.side || r.side === req.side) || atlas.recsByName('muscular', req.muscle)[0] : null;
-    return startSession({ joint: req.joint, movement: req.movement, side: req.side || (rec?.side === 'r' ? 'r' : 'l'), view: req.view || 'bone', muscle: rec, role: req.role || '', standalone: true, key: 'standalone' });
+    const act = rec ? (resolveFacts(rec.name)?.acts || []).find(([j, m]) => j === req.joint && m === req.movement) : null;
+    return startSession({ joint: req.joint, movement: req.movement, side: req.side || (rec?.side === 'r' ? 'r' : 'l'), view: req.view || 'bone', muscle: rec, role: req.role || act?.[2] || '', sites: req.sites || act?.[3], standalone: true, key: 'standalone' });
   }
   document.dispatchEvent(new CustomEvent('atlas:motion-ready'));
 }

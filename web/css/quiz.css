@@ -147,3 +147,16 @@ body.study-open .toolbar { display: none; }               /* Ghost / Isolate / L
   .mode-btn { padding: 5px 10px; }
   .lang select { padding: 5px 4px; max-width: 96px; }
 }
+
+/* Today: spaced review, streak, weakest topics */
+.qtoday { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel2); }
+.qtoday-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.qtoday-stats b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.qtoday-stats small { color: var(--muted); font-size: 11px; }
+.qweak h3 { margin: 4px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+.qweak ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.qweak li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+.qweak li small { color: var(--muted); }
+.qexam { margin: 4px 0; padding: 6px 10px; border-radius: 6px; font-weight: 600; }
+.qexam.pass { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.qexam.fail { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }

@@ -1,7 +1,9 @@
 {
   "private": true,
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@breezystack/lamejs": "^1.2.7",
-    "@vercel/blob": "^2.8.0"
+    "@vercel/blob": "^2.8.0",
+    "@vercel/functions": "^3.10.1"
   }
 }

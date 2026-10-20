@@ -1,4 +1,4 @@
-# Z-Anatomy Atlas
+# Anatomy Atlas — Visualize To Learn (VTL)
 
 Interactive 3D human anatomy atlas built from the Z-Anatomy Blender scene (`Startup.blend`):
 7,184 objects, ~3,900 anatomical structures across 9 body systems, ~1,100 landmarks, 3,800 descriptions.
@@ -6,7 +6,8 @@ Interactive 3D human anatomy atlas built from the Z-Anatomy Blender scene (`Star
 ```
 Startup.blend ──(tools/export_web.py, Blender 5.2)──▶ web/models/*.glb  web/data/*.json
               ──(tools/render_views.py)────────────▶ renders/*.png      web/img/*.png
-web/  = the static site (index.html + js/ + css/ + models/ + data/ + img/), no build step
+web/  = the static site (index.html + js/ + css/ + models/ + data/ + img/), no build step,
+        plus serverless functions in web/api/ (tutor chat, flags, owner review, weekly tally, text-to-speech)
 ```
 
 ## Folder map
@@ -25,18 +26,25 @@ web/  = the static site (index.html + js/ + css/ + models/ + data/ + img/), no b
 | `tools/relations_src.json` → `build_relations.py` | Nerve and blood supply of every curated muscle, key facts and clinical notes for nerves, vessels and bones → `web/data/relations.json` |
 | `tools/fetch_wiki_descriptions.py`, `desc_handwritten.json`, `postprocess_knowledge.py` | Fill structures the scene has no text for (matching Wikipedia leads, or short atlas notes) and clean citation / markup leftovers; run automatically at the end of the export |
 | `tools/browser/` | Headless-Chrome tests (`t_quiz`, `t_motion*`, `t_knowledge`, `t_section`, `t_views`, `t_study`, `t_lessons`, `t_digits`, …) |
+| `tools/build_cover_images.py` | Cover-page figures: keys the front renders onto transparency → `web/img/cover/*.webp` |
 | `renders/` | Rendered PNGs (1200×1800) |
 | `web/` | The deployable site |
 
 ## Run the site locally
 
 ```
-python -m http.server 8765 --directory web      # then open http://127.0.0.1:8765
+python -m http.server 8765 --directory web                 # static only: the 3D atlas, no tutor / flags
+node web/scripts/dev-server.js --port 8770 --mock-claude   # everything, with Claude mocked (no API spend)
 ```
+`dev-server.js` stands in for Vercel: it serves `web/` and runs `web/api/*.js`. It reads `web/.env.local`; flags are kept in
+memory unless Upstash variables are set; the owner page is at `/admin` with token `dev-admin` (unless `ADMIN_TOKEN` is set).
+Drop `--mock-claude` and put a real `ANTHROPIC_API_KEY` in `.env.local` to talk to Claude.
 Deep links: `#s=skeletal,nervous&sel=Femur.l&lang=la`, plus `g=1` / `i=1` (ghost / isolate), `cut=y0.620` (cross-section), `cam=…`, `note=…`, `pins=…` (saved views) and `lesson=knee.3`.
 Keys: `/` search · `G` ghost others · `I` isolate · `F` focus · `X` cross-section · `←` `→` lesson steps · `Esc` clear.
 
 Browser tests: serve on port 8770, then `node tools/browser/run.mjs --script tools/browser/t_lessons.mjs --logs errors` (see the header of `run.mjs`).
+Tests skip the cover screen unless you pass `--cover`. The tutor / flags / owner-page test needs the dev server with `--mock-claude`:
+`node tools/browser/run.mjs --cover --no-ready --script tools/browser/t_vtl.mjs --logs errors`.
 
 ## Site features (web/js)
 
@@ -49,6 +57,10 @@ Browser tests: serve on port 8770, then `node tools/browser/run.mjs --script too
 | `lessons.js` + `data/lessons.json` | **Guided lessons** (shoulder, upper-limb nerves, knee, heart, trunk sections, cranial nerves) that end in a quiz on the same topic |
 | `quiz.js` | Study mode: label / identify / locate / facts / movements quizzes; **spaced review** (due after 1, 3, 7, 16 days), Today panel with streak and weakest topics, **exam mode** with a 70 % pass mark |
 | `motion.js` | Joint motion animations, including muscle-specific digit movement |
+| `cover.js` | The **cover screen** shown before entering (skipped for links that carry atlas state, or after "Skip this screen next time") |
+| `tutor.js` + `api/chat.js` | The **anatomy tutor**: chat button on the stage and *Ask tutor* on every structure; Claude streams the answer, knows what is selected, and turns structure names into buttons that select them in 3D |
+| `feedback.js` + `api/feedback.js` | **Request a change / Flag**: wrong information, glitch or other, with a short answer. Each flag is stored, counted in the week's tally, and checked by a **reviewer agent** (`lib/review.js`) against the atlas's own text |
+| `admin.html` + `js/admin.js` + `api/admin.js` | **Owner review** (`/admin`, token-protected): flags that passed review, to accept, mark implemented or decline; weekly tally chart; frozen weekly reports from the Monday cron (`api/cron/weekly-tally.js`) |
 
 ## Rebuild the assets
 
@@ -72,6 +84,22 @@ The whole `web/` folder is ~32 MB (largest single file 3.5 MB), so it deploys as
 2. Vercel → *Add New Project* → import the repo → **Root Directory: `web`**, Framework Preset **Other**, no build command. Auto-deploys on push to `main`.
 3. Use the **production** URL; Vercel per-deployment URLs return 302 (deployment protection).
 
+### Tutor, flags and owner review (one-time setup in the Vercel dashboard)
+
+1. **Storage → Upstash for Redis** (free tier) → connect it to this project. It adds `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
+   Flags, weekly tallies and rate limits live there.
+2. **Settings → Environment Variables**:
+   - `ANTHROPIC_API_KEY` — from platform.claude.com. Used by the tutor (`claude-haiku-5-5` by default; `TUTOR_MODEL=claude-sonnet-5-5`
+     for a stronger one) and the reviewer agent (`claude-opus-5-5`).
+   - `ADMIN_TOKEN` — a long random string; the password for `/admin`.
+   - `CRON_SECRET` — another long random string; Vercel sends it to the Monday tally job.
+   - Optional `TUTOR_DAILY_LIMIT` (default 200 tutor messages a day for the whole site). Each visitor is also limited to 20
+     messages per 10 minutes and 150 a day, and 6 flags an hour.
+3. Redeploy. Set a monthly **spend limit** in the Anthropic console as a backstop.
+
+Without the API key the tutor says it is not set up and new flags wait in `/admin` as "needs a manual look"; without Redis,
+flags are switched off (the tutor still works). See `web/.env.example`.
+
 **Supabase is optional here.** The models are small enough to ship with the site. If you still want them in Supabase Storage, upload `web/models/*.glb` to a *public* bucket and set `modelBase` in `web/config.js` to
 `https://<project-ref>.supabase.co/storage/v1/object/public/<bucket>/models/`. Free plan limits: 1 GB storage, 5 GB egress/month, 50 MB per file, and only 2 active projects (both are used by musclequiz / aclquiz, so a bucket would have to live in one of those).
 
@@ -89,4 +117,4 @@ Search, body-system filter (CNS/PNS/respiratory/digestive/…), joint-type filte
 
 ## Licence & attribution
 
-Anatomy geometry: BodyParts3D © The Database Center for Life Science, **CC BY-SA 2.1 JP**, modified by Z-Anatomy; descriptions from Wikipedia (**CC BY-SA**), except entries marked as Z-Anatomy Atlas notes. Key facts, lessons and clinical notes are written for this atlas from standard references and are educational, not medical advice. Derived works must carry the same licence and attribution (shown in the site and in `web/data/license.txt`).
+Anatomy geometry: BodyParts3D © The Database Center for Life Science, **CC BY-SA 2.1 JP**, modified by Z-Anatomy; descriptions from Wikipedia (**CC BY-SA**), except entries marked as atlas notes ("Z-Anatomy Atlas note" in the data). Key facts, lessons and clinical notes are written for this atlas from standard references and are educational, not medical advice. Derived works must carry the same licence and attribution (shown in the site and in `web/data/license.txt`).

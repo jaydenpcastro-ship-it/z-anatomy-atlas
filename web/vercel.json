@@ -1,11 +1,18 @@
 {
   "cleanUrls": true,
   "functions": {
-    "api/tts.js": { "maxDuration": 60 }
+    "api/tts.js": { "maxDuration": 60 },
+    "api/chat.js": { "maxDuration": 60 },
+    "api/feedback.js": { "maxDuration": 60, "includeFiles": "data/**" },
+    "api/admin.js": { "maxDuration": 60, "includeFiles": "data/**" }
   },
+  "crons": [
+    { "path": "/api/cron/weekly-tally", "schedule": "0 13 * * 1" }
+  ],
   "headers": [
     { "source": "/models/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" }] },
     { "source": "/data/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" }] },
-    { "source": "/img/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }] }
+    { "source": "/img/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }] },
+    { "source": "/admin", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
   ]
 }

@@ -1,4 +1,5 @@
-// Z-Anatomy Atlas: navigation + 3D viewer. Plain ES modules, no build step.
+// Anatomy Atlas — Visualize To Learn (VTL): navigation + 3D viewer. Plain ES modules, no build step.
+// (The 3D model and the "Z-Anatomy Atlas note" marker in the description data come from the Z-Anatomy project.)
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -333,10 +334,24 @@ canvas.addEventListener('pointermove', (e) => {
   canvas.style.cursor = label ? 'pointer' : '';
 });
 canvas.addEventListener('pointerleave', () => { tip.hidden = true; });
+// A click/tap selects; a drag orbits. Fingers wobble more than a mouse, so touch and pen get a wider tap
+// radius; a second finger turns the gesture into a pinch/pan that must never end as a tap; and only the main
+// button picks, so a right-click or a two-finger trackpad click (the start of a pan) leaves the selection alone.
 let down = null;
-canvas.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; $('#hint').classList.add('hide'); });
+const pointersDown = new Set();
+const TAP_SLOP = { mouse: 4, pen: 8, touch: 12 };
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.isPrimary) pointersDown.clear();
+  pointersDown.add(e.pointerId);
+  down = pointersDown.size === 1 && e.button === 0 ? { x: e.clientX, y: e.clientY, id: e.pointerId } : null;
+  $('#hint').classList.add('hide');
+});
+canvas.addEventListener('pointercancel', (e) => { pointersDown.delete(e.pointerId); down = null; });
 canvas.addEventListener('pointerup', (e) => {
-  if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return;
+  pointersDown.delete(e.pointerId);
+  const tap = down && down.id === e.pointerId && Math.hypot(e.clientX - down.x, e.clientY - down.y) <= (TAP_SLOP[e.pointerType] ?? 4);
+  down = null;
+  if (!tap) return;
   const additive = e.ctrlKey || e.metaKey || e.shiftKey;
   const { rec, lm } = pickAt(e, false, { additive });
   if (atlas.pickHandler) { atlas.pickHandler(rec, lm, e); return; }   // study mode takes over clicks (no info panel, no selection)
@@ -887,7 +902,7 @@ async function runVideoExport(recs) {
   const isMp4 = mimeType.startsWith('video/mp4');
   const ext = isMp4 ? 'mp4' : 'webm';
   const names = [...new Set(recs.map((r) => nameOf(r)))];
-  const filename = `z-anatomy_${slug(names[0] || 'selection')}${names.length > 1 ? `-and-${names.length - 1}-more` : ''}`;
+  const filename = `anatomy-atlas-vtl_${slug(names[0] || 'selection')}${names.length > 1 ? `-and-${names.length - 1}-more` : ''}`;
   const ses = atlas.motion?.session;
   const wantMotion = EXPORT.motion && ses && ses.ready && ses.rec && recs.some((r) => r.id === ses.rec.id);
   const restoreRes = boostResolution(); // record sharper than the live view; on-screen size is unaffected
@@ -937,7 +952,7 @@ async function runExport(format) {
   const views = EXPORT.views.size ? [...EXPORT.views] : ['cur'];
   const names = [...new Set(recs.map((r) => nameOf(r)))];
   const systems = [...new Set(recs.map((r) => SYS[r.system]?.[0] || r.system))];
-  const title = `Z-Anatomy Atlas — ${names.length <= 3 ? names.join(', ') : `${names.length} structures`}`;
+  const title = `Anatomy Atlas VTL — ${names.length <= 3 ? names.join(', ') : `${names.length} structures`}`;
   const ses = atlas.motion?.session;
   const wantMotion = EXPORT.motion && ses && ses.ready && ses.rec && recs.some((r) => r.id === ses.rec.id);
   const saved = wantMotion ? { u: ses.u, scrub: ses.scrub, playing: ses.playing } : null;
@@ -954,7 +969,7 @@ async function runExport(format) {
   } finally {
     if (saved) { ses.u = saved.u; ses.scrub = saved.scrub; ses.playing = saved.playing; }
   }
-  const filename = `z-anatomy_${slug(names[0] || 'selection')}${names.length > 1 ? `-and-${names.length - 1}-more` : ''}`;
+  const filename = `anatomy-atlas-vtl_${slug(names[0] || 'selection')}${names.length > 1 ? `-and-${names.length - 1}-more` : ''}`;
   if (format === 'pdf') await exportPDF(frames, filename); else await exportPNG(frames, filename);
 }
 // The "Export" section embedded under each structure / group / multi-selection: pick a format, which planes and
@@ -1160,7 +1175,7 @@ function renderText(sib, host, ctx) {
     const own = t && /Z-Anatomy Atlas note[^\n]*$/.test(t.trim());
     holder.replaceChildren(el('h3', {}, t ? 'Description' : 'Summary'),
       t ? fmtDesc(t, rec.name) : (atlas.describe?.(rec) || el('p', { className: 'fine' }, 'No description available for this structure.')),
-      t ? el('p', { className: 'fine' }, own ? 'Text: Z-Anatomy Atlas, CC BY-SA.' : 'Text: Wikipedia, CC BY-SA.') : '');
+      t ? el('p', { className: 'fine' }, own ? 'Text: Anatomy Atlas VTL, CC BY-SA.' : 'Text: Wikipedia, CC BY-SA.') : '');
   });
 }
 registerTab({ id: 'facts', label: 'Facts', order: 10, applies: (sib) => isMuscle(sib[0]), render: renderFacts });

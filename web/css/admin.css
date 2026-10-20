@@ -133,3 +133,11 @@ table.ad-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font
   .ad-tile .val.hero { font-size: 38px; }
   .ad-flag dl { grid-template-columns: 1fr; }
 }
+
+/* touchscreens (phones, iPads): finger-sized controls; 16 px fields so iOS does not zoom the page on focus */
+@media (pointer: coarse) {
+  .btn, .ad-tab, .ad-filters select { min-height: 40px; }
+  :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) { font-size: 16px; }
+  :is(button, a, input, select, textarea, summary) { touch-action: manipulation; }
+  .ad-chart .col .hit { stroke: none; }
+}

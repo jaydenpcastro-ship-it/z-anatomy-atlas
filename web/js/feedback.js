@@ -36,7 +36,7 @@ const KINDS = [
 ];
 
 // --------------------------------------------------------------------- DOM ---
-const btn = el('button', { id: 'feedbackBtn', className: 'mode-btn fb-btn', type: 'button', 'aria-expanded': 'false', 'aria-controls': 'feedbackPanel', title: 'Report wrong information or a glitch, or request a change' },
+const btn = el('button', { id: 'feedbackBtn', className: 'mode-btn fb-btn', type: 'button', 'aria-label': 'Feedback: request a change', 'aria-expanded': 'false', 'aria-controls': 'feedbackPanel', title: 'Report wrong information or a glitch, or request a change' },
   el('span', { html: FLAG, style: 'display:contents' }), el('span', { className: 'fb-btn-label' }, 'Feedback'));
 $('#topbar .lang')?.before(btn);
 const panel = el('section', { id: 'feedbackPanel', className: 'vpanel', hidden: true, 'aria-labelledby': 'fbTitle' });

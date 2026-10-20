@@ -3,7 +3,7 @@
 //
 // The browser keeps the conversation and sends it whole each turn ({ messages: [{role, content}, …] }); user
 // turns may start with an <atlas_context> block the page writes (see js/tutor.js). Nothing is stored here.
-// Spend is capped per visitor and per day (TUTOR_DAILY_LIMIT, default 1000 messages for the whole site).
+// Spend is capped per visitor and per day (TUTOR_DAILY_LIMIT, default 200 messages for the whole site).
 const { Anthropic, getClient, configured, tutor, fallbackParams } = require('../lib/claude');
 const SYSTEM = require('../lib/tutor-prompt');
 const { json, body, caller, underLimit } = require('../lib/http');
@@ -51,7 +51,7 @@ module.exports = async function handler(req, res) {
   try {
     const ok = await underLimit(store, `vtl:rl:chat:burst:${who}`, 20, 600)
       && await underLimit(store, `vtl:rl:chat:day:${who}:${day}`, 150, 86400)
-      && await underLimit(store, `vtl:rl:chat:site:${day}`, Number(process.env.TUTOR_DAILY_LIMIT) || 1000, 86400);
+      && await underLimit(store, `vtl:rl:chat:site:${day}`, Number(process.env.TUTOR_DAILY_LIMIT) || 200, 86400);
     if (!ok) { json(res, 429, { error: 'You have reached the question limit for now. Please try again a little later.' }); return; }
   } catch (err) {
     console.error('chat rate limit check failed:', err.message);   // a store hiccup should not take the tutor down

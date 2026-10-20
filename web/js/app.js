@@ -334,10 +334,24 @@ canvas.addEventListener('pointermove', (e) => {
   canvas.style.cursor = label ? 'pointer' : '';
 });
 canvas.addEventListener('pointerleave', () => { tip.hidden = true; });
+// A click/tap selects; a drag orbits. Fingers wobble more than a mouse, so touch and pen get a wider tap
+// radius; a second finger turns the gesture into a pinch/pan that must never end as a tap; and only the main
+// button picks, so a right-click or a two-finger trackpad click (the start of a pan) leaves the selection alone.
 let down = null;
-canvas.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; $('#hint').classList.add('hide'); });
+const pointersDown = new Set();
+const TAP_SLOP = { mouse: 4, pen: 8, touch: 12 };
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.isPrimary) pointersDown.clear();
+  pointersDown.add(e.pointerId);
+  down = pointersDown.size === 1 && e.button === 0 ? { x: e.clientX, y: e.clientY, id: e.pointerId } : null;
+  $('#hint').classList.add('hide');
+});
+canvas.addEventListener('pointercancel', (e) => { pointersDown.delete(e.pointerId); down = null; });
 canvas.addEventListener('pointerup', (e) => {
-  if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return;
+  pointersDown.delete(e.pointerId);
+  const tap = down && down.id === e.pointerId && Math.hypot(e.clientX - down.x, e.clientY - down.y) <= (TAP_SLOP[e.pointerType] ?? 4);
+  down = null;
+  if (!tap) return;
   const additive = e.ctrlKey || e.metaKey || e.shiftKey;
   const { rec, lm } = pickAt(e, false, { additive });
   if (atlas.pickHandler) { atlas.pickHandler(rec, lm, e); return; }   // study mode takes over clicks (no info panel, no selection)

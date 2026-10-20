@@ -117,6 +117,7 @@ html.no-cover #cover { display: none; }
 .tutor-fab:hover { filter: brightness(1.06); transform: translateY(-1px); }
 .tutor-fab svg { width: 20px; height: 20px; flex: none; }
 body.tutor-open .tutor-fab { display: none; }
+#hint { bottom: 68px; max-width: calc(100% - 32px); text-align: center; }   /* sits above the tutor button */
 body.lesson-open .tutor-fab { bottom: auto; top: 12px; }
 
 .tutor-panel { position: absolute; right: 14px; bottom: 14px; z-index: 8; width: min(410px, calc(100% - 28px)); height: min(620px, calc(100% - 28px));
@@ -238,4 +239,49 @@ body.lesson-open .tutor-fab { bottom: auto; top: 12px; }
 #info .vtl-card p.vtl-mail { margin: 10px 0 0; font-size: 12.5px; }
 #info .vtl-card a, .fb-mail, .fb-done a, .cv-foot a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 
-@media (max-width: 520px) { .fb-btn .fb-btn-label { display: none; } #topbar .fb-btn { padding: 5px 8px; } }
+#topbar h1 { white-space: nowrap; }
+@media (max-width: 960px) { .fb-btn .fb-btn-label { display: none; } #topbar .fb-btn { padding-left: 10px; padding-right: 10px; } }
+
+/* ============================================================== multi-device === */
+/* Mouse (desktop PC), trackpads (laptops, iPad keyboards), phones and tablets. Input handling: js/devices.js. */
+
+/* Phones and tablets: "vh" includes the strip behind the browser's toolbar, which hid the bottom of the info panel
+   on iPhone and iPad. The dynamic viewport unit is the part actually on screen. */
+@supports (height: 1dvh) {
+  #app { height: 100dvh; }
+  .vpanel { max-height: calc(100dvh - 72px); }
+  @media (max-width: 860px) {
+    #app { grid-template-rows: var(--top) 1fr 42dvh; }
+    body.study-open #app { grid-template-rows: var(--top) 1fr 52dvh; }
+  }
+}
+
+/* Long-pressing the model must not start a text selection or the iOS callout menu. */
+#gl, #overlay, .vpins, #tip, #hint { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* Touch tablets (iPads in landscape, 861–1366 px): three columns left the model a narrow strip, so the
+   structure list slides in from the menu button instead, as on phones, and the model gets the room. */
+@media (min-width: 861px) and (max-width: 1366px) and (pointer: coarse) {
+  #app { grid-template-columns: 1fr var(--info); grid-template-areas: "top top" "stage info"; }
+  .icon-btn { display: block; }
+  #sidebar { position: fixed; z-index: 20; top: var(--top); bottom: 0; left: 0; width: min(88vw, 360px); transform: translateX(-100%);
+    transition: transform .2s; box-shadow: 0 0 40px rgba(0, 0, 0, .5); }
+  body.nav-open #sidebar { transform: none; }
+}
+
+/* Touchscreens: finger-sized targets (about 40 px), no double-tap zoom delay on controls, and 16 px text fields,
+   because iOS zooms the whole page into any smaller field when it gets focus. */
+@media (pointer: coarse) {
+  :is(button, a, input, select, textarea, label, summary) { touch-action: manipulation; }
+  :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) { font-size: 16px !important; }
+  #topbar .mode-btn, #topbar .views button, .toolbar button, .btn, .tab, .lang select, .filters select { min-height: 40px; }
+  .row { min-height: 40px; }
+  .icon-btn { min-width: 44px; min-height: 44px; }
+  .res { padding-top: 10px; padding-bottom: 10px; }
+  .eye, .listen-ico, .fav-toggle { width: 40px; height: 40px; }
+  .vnote-x, .sec-x, .tp-icon, .fav-row .x, .multi-item .x { min-width: 40px; min-height: 40px; }
+  .pc-btn { width: 36px; height: 36px; }
+  .chip, .kchip, .lm-list button { min-height: 32px; }
+  .tp-chip { padding: 3px 8px 3px 6px; margin: 1px; }
+  .check input, .fb-check input, .cv-skip input { width: 20px; height: 20px; }
+}

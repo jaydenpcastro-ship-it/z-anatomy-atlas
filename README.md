@@ -93,7 +93,7 @@ The whole `web/` folder is ~32 MB (largest single file 3.5 MB), so it deploys as
      for a stronger one) and the reviewer agent (`claude-opus-5-5`).
    - `ADMIN_TOKEN` — a long random string; the password for `/admin`.
    - `CRON_SECRET` — another long random string; Vercel sends it to the Monday tally job.
-   - Optional `TUTOR_DAILY_LIMIT` (default 1,000 tutor messages a day for the whole site). Each visitor is also limited to 20
+   - Optional `TUTOR_DAILY_LIMIT` (default 200 tutor messages a day for the whole site). Each visitor is also limited to 20
      messages per 10 minutes and 150 a day, and 6 flags an hour.
 3. Redeploy. Set a monthly **spend limit** in the Anthropic console as a backstop.
 

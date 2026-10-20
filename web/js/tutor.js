@@ -24,7 +24,7 @@ const ICON = {
   stop: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>',
   eye: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/></svg>',
 };
-const KEY = 'vtl.tutor.v1', MAX_QUESTION = 1500;
+const KEY = 'vtl.tutor.v1', MAX_QUESTION = 250;     // must match MAX_QUESTION in api/chat.js
 const mobile = () => matchMedia('(max-width: 860px)').matches;
 const SYS_NAME = () => atlas?.SYS || {};
 
@@ -50,7 +50,7 @@ const panel = el('section', { className: 'tutor-panel', id: 'tutorPanel', role: 
   log,
   ctxBar,
   el('form', { className: 'tp-form', onsubmit: (e) => { e.preventDefault(); busy ? stop() : submit(); } }, input, sendBtn),
-  el('p', { className: 'tp-note' }, 'For learning only — not medical advice.'));
+  el('p', { className: 'tp-note' }, el('span', {}, 'For learning only — not medical advice.'), el('span', { className: 'tp-count', 'aria-live': 'polite' })));
 const stage = $('#stage');
 stage.append(fab, panel);
 
@@ -254,7 +254,12 @@ function setBusy(on) {
   sendBtn.title = on ? 'Stop' : 'Send';
   sendBtn.setAttribute('aria-label', on ? 'Stop the answer' : 'Send');
 }
-function autosize() { input.style.height = 'auto'; input.style.height = `${Math.min(140, Math.max(44, input.scrollHeight + 2))}px`; }
+function autosize() {
+  input.style.height = 'auto'; input.style.height = `${Math.min(140, Math.max(44, input.scrollHeight + 2))}px`;
+  const n = input.value.length, count = panel.querySelector('.tp-count');
+  count.textContent = n ? `${n} / ${MAX_QUESTION}` : '';
+  count.classList.toggle('full', n >= MAX_QUESTION);
+}
 input.addEventListener('input', autosize);
 input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!busy) submit(); }

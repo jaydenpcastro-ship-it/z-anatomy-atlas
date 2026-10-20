@@ -10,13 +10,23 @@ const { json, body, caller, underLimit } = require('../lib/http');
 const { limiterStore } = require('../lib/store');
 
 const MAX_MESSAGES = 16;                       // the last 8 exchanges are plenty of context for a tutor
-const MAX_USER_CHARS = 6000, MAX_ASSISTANT_CHARS = 8000;
+const MAX_QUESTION = 250;                      // what the learner types (js/tutor.js enforces the same limit)
+const MAX_CONTEXT = 1500, MAX_ASSISTANT_CHARS = 8000;
+
+// A user turn is an optional <atlas_context> block written by the page, then the learner's question.
+function userTurn(text) {
+  const m = /^\s*(<atlas_context>[\s\S]*?<\/atlas_context>)\s*/.exec(text);
+  const ctx = m ? m[1].slice(0, MAX_CONTEXT) : '';
+  const question = (m ? text.slice(m[0].length) : text).trim().slice(0, MAX_QUESTION);
+  return question ? (ctx ? `${ctx}\n\n${question}` : question) : '';
+}
 
 function sanitize(list) {
   if (!Array.isArray(list)) return null;
   const msgs = list
     .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
-    .map((m) => ({ role: m.role, content: m.content.slice(0, m.role === 'user' ? MAX_USER_CHARS : MAX_ASSISTANT_CHARS) }))
+    .map((m) => ({ role: m.role, content: m.role === 'user' ? userTurn(m.content) : m.content.slice(0, MAX_ASSISTANT_CHARS) }))
+    .filter((m) => m.content)
     .slice(-MAX_MESSAGES);
   while (msgs.length && msgs[0].role !== 'user') msgs.shift();
   return msgs.length && msgs[msgs.length - 1].role === 'user' ? msgs : null;

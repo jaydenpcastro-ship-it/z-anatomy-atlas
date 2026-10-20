@@ -62,6 +62,11 @@ export default async function (page, h) {
   await waitFor(() => !document.querySelector('.tp-send.stop') && document.querySelectorAll('.tp-msg.bot').length === 2, null, 30000);
   const sent2 = (await (await fetch(`${base}/__mock/requests`)).json()).filter((r) => r.body.stream).pop();
   check('a follow-up sends the whole conversation', sent2.body.messages.length === 3 && sent2.body.messages[1].role === 'assistant', String(sent2.body.messages.length));
+  check('tutor questions are capped at 250 characters', await ev(() => document.querySelector('.tp-form textarea').maxLength === 250));
+  await (await fetch(`${base}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages: [{ role: 'user', content: `<atlas_context>\nSelected structure: Femur\n</atlas_context>\n\n${'q'.repeat(400)}` }] }) })).text();
+  const capped = (await (await fetch(`${base}/__mock/requests`)).json()).filter((r) => r.body.stream).pop().body.messages.at(-1).content;
+  check('the server trims a longer question to 250 characters and keeps the context', /<\/atlas_context>\n\nq{250}$/.test(capped), `${capped.length} chars`);
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitFor(() => window.atlas?.S?.M && window.atlas.tutor);
   await ev(() => window.atlas.ready.then(() => true));          // the link's saved selection is restored first

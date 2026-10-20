@@ -188,7 +188,9 @@ body.lesson-open .tutor-fab { bottom: auto; top: 12px; }
 .tp-send svg { width: 20px; height: 20px; }
 .tp-send:disabled { opacity: .4; cursor: default; }
 .tp-send.stop { background: var(--panel2); color: var(--text); border: 1px solid var(--line); }
-.tp-note { margin: 0; padding: 0 14px 10px; font-size: 11px; color: #7b889a; }
+.tp-note { display: flex; justify-content: space-between; gap: 8px; margin: 0; padding: 0 14px 10px; font-size: 11px; color: #7b889a; }
+.tp-count { font-variant-numeric: tabular-nums; }
+.tp-count.full { color: #fca5a5; }
 
 /* the "Ask tutor" and "Flag" buttons added to a structure's info-panel actions */
 .btn.vtl-act { display: inline-flex; align-items: center; gap: 6px; }

@@ -1,12 +1,13 @@
 // Headless-Chrome harness for the atlas (no extension needed). Uses the Chrome installed on this machine + SwiftShader WebGL.
 //
 //   node tools/browser/run.mjs [url] [--eval "js"] [--script file.mjs] [--shot out.png] [--size 1400x900] [--hash "#s=skeletal"]
-//                              [--wait 1500] [--no-ready] [--logs all|errors]
+//                              [--wait 1500] [--no-ready] [--logs all|errors] [--cover]
 //
 //  url       default http://127.0.0.1:8770/ (serve with: python -m http.server 8770 --directory web)
 //  --eval    JS evaluated in the page after atlas.ready (REPL-style, `await` allowed); result printed as JSON
 //  --script  ES module whose default export is async (page, h) => {...}; h = { shot(name), wait(ms), evalJs(src), sleep }
 //  --shot    screenshot of the final state
+//  --cover   show the landing cover (by default tests skip it, as a returning visitor who ticked "skip" would)
 // Console messages and uncaught page errors are echoed as "[console.*]" / "[pageerror]" lines.
 import puppeteer from 'puppeteer-core';
 import { pathToFileURL } from 'node:url';
@@ -15,7 +16,7 @@ import fs from 'node:fs';
 const argv = process.argv.slice(2);
 const opt = (name, def) => { const i = argv.indexOf(`--${name}`); return i >= 0 ? argv[i + 1] : def; };
 const flag = (name) => argv.includes(`--${name}`);
-const url = argv.find((a, i) => !a.startsWith('--') && !(i > 0 && argv[i - 1].startsWith('--') && !['--no-ready'].includes(argv[i - 1]))) || 'http://127.0.0.1:8770/';
+const url = argv.find((a, i) => !a.startsWith('--') && !(i > 0 && argv[i - 1].startsWith('--') && !['--no-ready', '--cover'].includes(argv[i - 1]))) || 'http://127.0.0.1:8770/';
 const [W, H] = (opt('size', '1400x900')).split('x').map(Number);
 const CHROME = ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find((p) => fs.existsSync(p));
 
@@ -24,6 +25,7 @@ const browser = await puppeteer.launch({
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl', '--no-sandbox', '--disable-background-timer-throttling'],
 });
 const page = await browser.newPage();
+if (!flag('cover')) await page.evaluateOnNewDocument(() => { try { localStorage.setItem('vtl.cover.skip', '1'); } catch { /* ignore */ } });
 const logs = opt('logs', 'all');
 page.on('console', (m) => { if (logs === 'all' || m.type() === 'error') console.log(`[console.${m.type()}] ${m.text()}`); });
 page.on('pageerror', (e) => console.log(`[pageerror] ${e.message}`));

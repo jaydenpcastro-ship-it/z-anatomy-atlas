@@ -55,7 +55,7 @@ function factRows(rows) {
 const clinical = (text) => text && el('aside', { className: 'kclin', 'aria-label': 'Clinical relevance' },
   el('h4', {}, 'Clinical relevance'), el('p', {}, text), el('p', { className: 'fine' }, 'Educational information, not medical advice.'));
 const traceBtn = (text, fn, primary) => el('button', { type: 'button', className: `btn${primary ? ' primary' : ''}`, onclick: fn }, text);
-const source = () => el('p', { className: 'fine' }, 'Key facts: Z-Anatomy Atlas, from standard anatomy references (Gray\'s, Moore, Netter). Report errors via the project repository.');
+const source = () => el('p', { className: 'fine' }, 'Key facts: Anatomy Atlas VTL, from standard anatomy references (Gray\'s, Moore, Netter). Spot an error? Use the Flag button above.');
 
 // ------------------------------------------------------- muscle: supply ---
 // Added to the muscle Facts card (after origin / insertion / action / nerve).
@@ -131,7 +131,7 @@ function describe(rec) {
   const sup = REL.vessels[rec.name]?.muscles || REL.nerves[rec.name]?.muscles;
   if (sup?.length) facts.push(['M', 'Muscles supplied', links(sup, rec.side)]);
   box.append(factRows(facts));
-  if (rec.name.startsWith('(')) box.append(el('p', { className: 'fine' }, 'Names in brackets mark inconstant or minor structures in Z-Anatomy.'));
+  if (rec.name.startsWith('(')) box.append(el('p', { className: 'fine' }, 'Names in brackets mark inconstant or minor structures in the Z-Anatomy model.'));
   box.append(el('p', { className: 'fine' }, 'No written description yet. This summary is generated from the atlas\'s own data (name, hierarchy and translations).'));
   return box;
 }

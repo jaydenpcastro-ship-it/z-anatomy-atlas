@@ -1,4 +1,5 @@
-// Z-Anatomy Atlas: navigation + 3D viewer. Plain ES modules, no build step.
+// Anatomy Atlas — Visualize To Learn (VTL): navigation + 3D viewer. Plain ES modules, no build step.
+// (The 3D model and the "Z-Anatomy Atlas note" marker in the description data come from the Z-Anatomy project.)
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -887,7 +888,7 @@ async function runVideoExport(recs) {
   const isMp4 = mimeType.startsWith('video/mp4');
   const ext = isMp4 ? 'mp4' : 'webm';
   const names = [...new Set(recs.map((r) => nameOf(r)))];
-  const filename = `z-anatomy_${slug(names[0] || 'selection')}${names.length > 1 ? `-and-${names.length - 1}-more` : ''}`;
+  const filename = `anatomy-atlas-vtl_${slug(names[0] || 'selection')}${names.length > 1 ? `-and-${names.length - 1}-more` : ''}`;
   const ses = atlas.motion?.session;
   const wantMotion = EXPORT.motion && ses && ses.ready && ses.rec && recs.some((r) => r.id === ses.rec.id);
   const restoreRes = boostResolution(); // record sharper than the live view; on-screen size is unaffected
@@ -937,7 +938,7 @@ async function runExport(format) {
   const views = EXPORT.views.size ? [...EXPORT.views] : ['cur'];
   const names = [...new Set(recs.map((r) => nameOf(r)))];
   const systems = [...new Set(recs.map((r) => SYS[r.system]?.[0] || r.system))];
-  const title = `Z-Anatomy Atlas — ${names.length <= 3 ? names.join(', ') : `${names.length} structures`}`;
+  const title = `Anatomy Atlas VTL — ${names.length <= 3 ? names.join(', ') : `${names.length} structures`}`;
   const ses = atlas.motion?.session;
   const wantMotion = EXPORT.motion && ses && ses.ready && ses.rec && recs.some((r) => r.id === ses.rec.id);
   const saved = wantMotion ? { u: ses.u, scrub: ses.scrub, playing: ses.playing } : null;
@@ -954,7 +955,7 @@ async function runExport(format) {
   } finally {
     if (saved) { ses.u = saved.u; ses.scrub = saved.scrub; ses.playing = saved.playing; }
   }
-  const filename = `z-anatomy_${slug(names[0] || 'selection')}${names.length > 1 ? `-and-${names.length - 1}-more` : ''}`;
+  const filename = `anatomy-atlas-vtl_${slug(names[0] || 'selection')}${names.length > 1 ? `-and-${names.length - 1}-more` : ''}`;
   if (format === 'pdf') await exportPDF(frames, filename); else await exportPNG(frames, filename);
 }
 // The "Export" section embedded under each structure / group / multi-selection: pick a format, which planes and
@@ -1160,7 +1161,7 @@ function renderText(sib, host, ctx) {
     const own = t && /Z-Anatomy Atlas note[^\n]*$/.test(t.trim());
     holder.replaceChildren(el('h3', {}, t ? 'Description' : 'Summary'),
       t ? fmtDesc(t, rec.name) : (atlas.describe?.(rec) || el('p', { className: 'fine' }, 'No description available for this structure.')),
-      t ? el('p', { className: 'fine' }, own ? 'Text: Z-Anatomy Atlas, CC BY-SA.' : 'Text: Wikipedia, CC BY-SA.') : '');
+      t ? el('p', { className: 'fine' }, own ? 'Text: Anatomy Atlas VTL, CC BY-SA.' : 'Text: Wikipedia, CC BY-SA.') : '');
   });
 }
 registerTab({ id: 'facts', label: 'Facts', order: 10, applies: (sib) => isMuscle(sib[0]), render: renderFacts });

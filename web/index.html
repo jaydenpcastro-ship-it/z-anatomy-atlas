@@ -3,13 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Z-Anatomy Atlas</title>
-<meta name="description" content="Interactive 3D human anatomy atlas: navigate skeletal, muscular, cardiovascular, nervous, visceral and lymphoid systems, joints and body regions.">
+<title>Anatomy Atlas — Visualize To Learn (VTL)</title>
+<meta name="description" content="Anatomy Atlas — Visualize To Learn (VTL): a free interactive 3D atlas of the human body. Explore skeletal, muscular, nervous, cardiovascular and visceral systems layer by layer, follow guided lessons, quiz yourself, and ask an AI anatomy tutor.">
+<meta property="og:title" content="Anatomy Atlas — Visualize To Learn (VTL)">
+<meta property="og:description" content="A free interactive 3D atlas of the human body, with guided lessons, quizzes and an AI anatomy tutor.">
+<meta name="theme-color" content="#0b0f15">
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/quiz.css">
 <link rel="stylesheet" href="css/motion.css">
 <link rel="stylesheet" href="css/features.css">
+<link rel="stylesheet" href="css/vtl.css">
+<script>
+  // Before first paint: skip the cover for shared links / reloads that already carry atlas state, or when the
+  // visitor chose "skip next time". Also keep the last few page errors for glitch reports (js/feedback.js).
+  (function () {
+    var skip = false;
+    try { skip = localStorage.getItem('vtl.cover.skip') === '1'; } catch (e) { /* storage blocked */ }
+    if (skip || /(^|[#&])(s|sel|lesson|cam|note|pins|cut)=/.test(location.hash)) document.documentElement.classList.add('no-cover');
+    var errs = window.__vtlErrors = [];
+    var keep = function (m) { errs.push(String(m).slice(0, 240)); if (errs.length > 8) errs.shift(); };
+    addEventListener('error', function (e) { keep((e.message || 'Error') + (e.filename ? ' @ ' + e.filename.split('/').pop() + ':' + e.lineno : '')); });
+    addEventListener('unhandledrejection', function (e) { keep('Unhandled: ' + ((e.reason && e.reason.message) || e.reason)); });
+  })();
+</script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
@@ -18,12 +35,64 @@
 </script>
 </head>
 <body>
+<!-- Cover screen shown before entering the atlas (js/cover.js). The atlas loads behind it. -->
+<section id="cover" role="dialog" aria-modal="true" aria-labelledby="cvTitle" aria-describedby="cvLead">
+  <div class="cv-bg" aria-hidden="true"></div>
+  <header class="cv-top">
+    <span class="cv-brand"><img src="img/favicon.svg" alt="" width="30" height="30"> Anatomy Atlas <b>VTL</b></span>
+    <span class="cv-free">Free · open data</span>
+  </header>
+  <div class="cv-main">
+    <div class="cv-copy">
+      <p class="cv-eyebrow">Anatomy Atlas · Visualize To Learn</p>
+      <h1 id="cvTitle">See the body,<br><em>layer by layer.</em></h1>
+      <p id="cvLead" class="cv-lead">An interactive 3D atlas of the human body. Rotate it, peel back the systems, cut cross-sections, follow guided lessons — and ask an AI anatomy tutor whenever something doesn't click.</p>
+      <div class="cv-cta">
+        <button id="cvEnter" class="cv-btn primary" type="button">Enter the atlas <span aria-hidden="true">→</span></button>
+        <button id="cvTutor" class="cv-btn" type="button">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4h0A2.5 2.5 0 0 1 4 13.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.5 8.5h7M8.5 11.5h4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Ask the anatomy tutor
+        </button>
+      </div>
+      <p class="cv-status" id="cvStatus" role="status"><i aria-hidden="true"></i><span>Loading the 3D model…</span></p>
+      <dl class="cv-stats">
+        <div><dt>3,900+</dt><dd>structures</dd></div>
+        <div><dt>9</dt><dd>body systems</dd></div>
+        <div><dt>1,100+</dt><dd>bony landmarks</dd></div>
+        <div><dt>6</dt><dd>guided lessons</dd></div>
+      </dl>
+    </div>
+    <figure class="cv-figure" aria-label="The skeletal, muscular, nervous and cardiovascular systems, revealed one layer at a time">
+      <div class="cv-stack">
+        <img class="cv-layer on" src="img/cover/skeletal.webp" alt="" fetchpriority="high" data-label="Skeletal system" data-color="#E6DCC6">
+        <img class="cv-layer" data-src="img/cover/muscular.webp" alt="" data-label="Muscular system" data-color="#D0453C">
+        <img class="cv-layer" data-src="img/cover/nervous.webp" alt="" data-label="Nervous system" data-color="#F3D24E">
+        <img class="cv-layer" data-src="img/cover/cardiovascular.webp" alt="" data-label="Cardiovascular system" data-color="#E0453B">
+        <img class="cv-layer" data-src="img/cover/all_systems.webp" alt="" data-label="All systems together" data-color="#5eead4">
+        <span class="cv-scan" aria-hidden="true"></span>
+      </div>
+      <figcaption class="cv-caption" aria-hidden="true"><i></i><span>Skeletal system</span><b class="cv-ticks"></b></figcaption>
+    </figure>
+  </div>
+  <ul class="cv-features">
+    <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z M12 12l8-4.5M12 12v9M12 12L4 7.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg><div><b>Explore in 3D</b><span>Isolate, ghost and section any structure.</span></div></li>
+    <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4zM20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg><div><b>Learn step by step</b><span>Shoulder, knee, heart, cranial nerves…</span></div></li>
+    <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 12.2l2.7 2.7L16.2 9.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><div><b>Test yourself</b><span>Quizzes, spaced review, exam mode.</span></div></li>
+    <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg><div><b>Ask the tutor</b><span>Explanations linked to the model.</span></div></li>
+  </ul>
+  <footer class="cv-foot">
+    <label class="cv-skip"><input type="checkbox" id="cvSkip"> Skip this screen next time</label>
+    <span>Questions or issues? Email <a data-vtl="email">the site owner</a>.</span>
+    <span>3D model: Z-Anatomy, from BodyParts3D © DBCLS (CC BY-SA). Educational use — not medical advice.</span>
+  </footer>
+</section>
+
 <div id="app">
   <header id="topbar">
     <button id="menuBtn" class="icon-btn" aria-label="Toggle navigation" aria-expanded="true">
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
     </button>
-    <h1>Z-Anatomy <span>Atlas</span></h1>
+    <h1 title="Anatomy Atlas — Visualize To Learn">Anatomy Atlas <span>VTL</span></h1>
     <div class="spacer"></div>
     <div class="views" role="group" aria-label="Camera views">
       <button data-view="front">Front</button>
@@ -82,10 +151,22 @@
     <h2>Select a structure</h2>
     <p>Pick a body system on the left, browse its groups, or search. Click any structure in the 3D view to read about it.</p>
     <p>Tip: press the 🔊 speaker button on a category, group, or structure to have it read aloud — handy for hands-free study. Ctrl/⌘-click (or Shift-click) to select several structures — even from different systems, like a ligament, a muscle, and a joint — and isolate them together.</p>
-    <p class="fine">Model: Z-Anatomy, derived from BodyParts3D (© The Database Center for Life Science, CC BY-SA 2.1 JP). Descriptions from Wikipedia (CC BY-SA). Shared under the same licence.</p>
+    <div class="vtl-card">
+      <h3>Stuck on a concept?</h3>
+      <p>The anatomy tutor explains things in plain language and shows the structures on the model.</p>
+      <button class="btn primary" type="button" data-vtl="tutor">Ask the tutor</button>
+    </div>
+    <div class="vtl-card">
+      <h3>Help improve the atlas</h3>
+      <p>Spotted wrong information or a glitch, or want something added? Tell us — every report is reviewed.</p>
+      <button class="btn" type="button" data-vtl="feedback">Request a change</button>
+      <p class="vtl-mail">Further inquiries or issues? Email <a data-vtl="email">the site owner</a>.</p>
+    </div>
+    <p class="fine">Anatomy Atlas — Visualize To Learn (VTL). Model: Z-Anatomy, derived from BodyParts3D (© The Database Center for Life Science, CC BY-SA 2.1 JP). Descriptions from Wikipedia (CC BY-SA). Shared under the same licence.</p>
   </div>
 </template>
 <script src="config.js"></script>
+<script type="module" src="js/cover.js"></script>
 <script type="module" src="js/app.js"></script>
 <script type="module" src="js/quiz.js"></script>
 <script type="module" src="js/motion.js"></script>
@@ -93,5 +174,7 @@
 <script type="module" src="js/section.js"></script>
 <script type="module" src="js/views.js"></script>
 <script type="module" src="js/lessons.js"></script>
+<script type="module" src="js/tutor.js"></script>
+<script type="module" src="js/feedback.js"></script>
 </body>
 </html>
